@@ -126,6 +126,9 @@ input,select{font-family:inherit;font-size:15px}
 .hole-cell.stb-pos input{border-color:rgba(21,117,79,.55)}
 .nine-lbl{grid-column:1/-1;font-family:'Oswald';font-size:11px;letter-spacing:1.5px;color:var(--muted);
   text-transform:uppercase;margin:10px 0 2px}
+.ret-box{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.ret-box.marcada{background:var(--pine-tint);border-color:var(--pine)}
 .sp-totals{display:flex;gap:16px;margin-top:12px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
 .sp-totals b{color:var(--text);font-variant-numeric:tabular-nums}
 
@@ -248,10 +251,14 @@ input,select{font-family:inherit;font-size:15px}
         <div class="field"><label>Mínimo por vuelta (ida y vuelta)</label><input id="cfgMinPorNine" type="number" min="0" oninput="saveCfg()"></div>
       </div>
       <div class="row-2">
-        <div class="field"><label>Corte de la comida (nº arriba)</label><input id="cfgGala" type="number" min="0" oninput="saveCfg()"></div>
-        <div class="field"><label>Descartes (peores rondas)</label><input id="cfgDescartes" type="number" min="0" oninput="saveCfg()"></div>
+        <div class="field"><label>Cuentan las N mejores rondas</label><input id="cfgCuentan" type="number" min="1" oninput="saveCfg()"></div>
+        <div class="field"><label>Máximo de rondas jugables</label><input id="cfgMaxRondas" type="number" min="1" oninput="saveCfg()"></div>
       </div>
-      <div class="hint">Menos es mejor: cada tarjeta suma (neto − par) de los 9 hoyos, y el ganador de la partida resta el bonus. Gana quien menos acumule. Para clasificar: mínimo de rondas y jugar cada vuelta (ida y vuelta) el mínimo indicado.</div>
+      <div class="row-2">
+        <div class="field"><label>Jugadores mínimos por partida</label><input id="cfgMinJug" type="number" min="2" oninput="saveCfg()"></div>
+        <div class="field"><label>Corte de la comida (nº arriba)</label><input id="cfgGala" type="number" min="0" oninput="saveCfg()"></div>
+      </div>
+      <div class="hint">Juego por golpes: cada tarjeta suma tus golpes menos tu objetivo (par + hándicap). De todas tus rondas solo puntúan las mejores, así que jugar más solo puede mejorarte. Gana quien menos acumule. El hándicap se actualiza solo al cerrar cada partida.</div>
       <div class="field">
         <label>Hándicap de juego</label>
         <select id="cfgHcp" onchange="saveCfg()">
@@ -259,10 +266,7 @@ input,select{font-family:inherit;font-size:15px}
           <option value="exacto">Exacto redondeado</option>
         </select>
       </div>
-      <div class="row-2">
-        <div class="field"><label>Allowance (%)</label><input id="cfgAllowance" type="number" min="0" max="100" oninput="saveCfg()"></div>
-        <div class="field"><label>Puntos que resta ganar la partida</label><input id="cfgVictoria" type="number" step="0.5" min="0" oninput="saveCfg()"></div>
-      </div>
+      <div class="field"><label>Allowance (%)</label><input id="cfgAllowance" type="number" min="0" max="100" oninput="saveCfg()"></div>
     </div>
     <div class="card">
       <div class="sec-head" style="margin-bottom:12px"><div><h2 style="font-size:15px">Sincronización (todos los móviles)</h2></div></div>
@@ -306,7 +310,7 @@ input,select{font-family:inherit;font-size:15px}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <script>
-const KEY='liguillaPineda3';
+const KEY='liguillaPineda4';
 const SESSKEY='liguillaPinedaSession';
 /* Almacenamiento seguro: usa el del navegador si está disponible; si no (p. ej. vista previa), memoria de la sesión */
 const LS=(()=>{ 
@@ -343,12 +347,15 @@ const PINEDA={
 function seed(){
   const holes=PINEDA.par.map((p,i)=>({n:i+1,par:p,si:PINEDA.si[i]}));
   return {
-    cfg:{nombre:'Liguilla Pineda',temporada:'2026',hcpMethod:'whs',allowance:100,descartes:0,
-      adminPass:'',minTarjetas:5,minPorNine:2,galaCorte:6,puntosVictoria:1,
-      bajadaPorPunto:0.5,bufferMin:32,subida:0.1,hcpMax:26.4,syncUrl:''},
+    cfg:{nombre:'Liguilla Pineda',temporada:'2026',hcpMethod:'whs',allowance:100,
+      adminPass:'',minTarjetas:8,minPorNine:2,cuentanMejores:8,maxRondas:16,minJugadores:3,galaCorte:6,
+      whsActivo:true,whsOffset:2.9,pcc:0,syncUrl:''},
     courses:[{id:uid(),nombre:'Real Club Pineda',verificado:true,
-      tees:[{nombre:'Blancas',slope:138,cr:72.0,metros:5986}],hoyos:holes}],
+      tees:[{nombre:'Blancas',slope:138,cr:72.0,metros:5986,
+        cr9i:null,slope9i:null,cr9v:null,slope9v:null}],hoyos:holes}],
     jugadores:[
+      {id:'javier',nombre:'Javier Díaz',hcpExacto:11.4,licencia:'991357',pin:'',lowHI:12.0,
+        whsDiffs:[29.9,17.6,23.1,18.1,22.1,16.0,17.8,16.9,10.5,14.8,16.8,7.6,9.5,17.8,16.6,17.8,16.6,8.8,12.3,11.7].map(d=>({d}))},
       {id:'caye',nombre:'Caye',hcpExacto:13,licencia:'',pin:''},
       {id:'tito',nombre:'Tito',hcpExacto:10,licencia:'',pin:''},
       {id:'juni',nombre:'Juni',hcpExacto:11,licencia:'',pin:''},
@@ -488,7 +495,7 @@ function enterApp(){
   if(!isAdmin()){const cur=document.querySelector('.view.active');if(cur&&['v-jugadores','v-campos','v-ajustes'].includes(cur.id))nav('clasif');}
   render();
   const me=S.jugadores.find(x=>x.id===myId());
-  if(me&&(me.hcpExacto==null||isNaN(me.hcpExacto)))askOwnHcp();
+  if(me&&!whsAuto(me)&&(me.hcpExacto==null||isNaN(me.hcpExacto)))askOwnHcp();
 }
 
 /* ================= HÁNDICAP + STABLEFORD ================= */
@@ -518,27 +525,129 @@ function recIdx(rec){
 }
 function recLabel(rec){return rec==='vuelta'?'Vuelta (10–18)':rec==='18'?'18 hoyos':'Ida (1–9)';}
 function recShort(rec){return rec==='vuelta'?'Vuelta':rec==='18'?'18h':'Ida';}
-/* Reparte el hándicap de juego del segmento entre sus hoyos según índice de golpe */
-function segStrokes(course,idxs,phSeg){
-  const order=idxs.map(i=>({i,si:course.hoyos[i].si})).sort((a,b)=>a.si-b.si);
-  const rank={}; order.forEach((o,k)=>rank[o.i]=k+1);
-  const n=idxs.length, base=Math.floor(phSeg/n), rem=phSeg-base*n, map={};
-  idxs.forEach(i=>{const r=rank[i];
-    map[i]= phSeg>=0 ? base+(r<=rem?1:0) : (r>n+phSeg ? -1:0);});
-  return map;
+/* ================= WHS · índice interno de la liguilla =================
+   Sembrado con los 20 diferenciales de la RFEG al empezar. A partir de ahí
+   SOLO lo mueven las vueltas de la liguilla (el índice oficial no nos afecta). */
+const WHS_TABLA=[
+  {min:3,max:3,n:1,adj:-2.0},{min:4,max:4,n:1,adj:-1.0},{min:5,max:5,n:1,adj:0},
+  {min:6,max:6,n:2,adj:-1.0},{min:7,max:8,n:2,adj:0},{min:9,max:11,n:3,adj:0},
+  {min:12,max:14,n:4,adj:0},{min:15,max:16,n:5,adj:0},{min:17,max:18,n:6,adj:0},
+  {min:19,max:19,n:7,adj:0},{min:20,max:9999,n:8,adj:0}
+];
+function whsTabla(n){return WHS_TABLA.find(r=>n>=r.min&&n<=r.max)||null;}
+function scoreDifferential(ags,cr,slope,pcc){
+  if(!slope)return null;
+  return (113/slope)*(ags-cr-(+pcc||0));
 }
+/* Diferencial esperado de 9 hoyos según el índice del día.
+   Aproximación de la tabla (propietaria) de la USGA: dif. media 18h ≈ HI + offset. */
+function expected9(hi){
+  const off=(S.cfg.whsOffset==null?2.9:+S.cfg.whsOffset);
+  return ((+hi||0)+off)/2;
+}
+/* Golpes ajustados: máximo por hoyo = par + 2 + golpes recibidos (net double bogey) */
+function adjustedGross(res,course,idxs,sMap){
+  let ags=0;
+  idxs.forEach(i=>{
+    const g=+(res.hoyos?.[i])||0; if(g<=0)return;
+    const max=course.hoyos[i].par+2+(sMap[i]||0);
+    ags+=Math.min(g,max);
+  });
+  return ags;
+}
+/* Índice = media de los 8 mejores de los últimos 20, con topes */
+function whsIndex(diffs,lowHI){
+  const last=diffs.slice(-20);
+  const r=whsTabla(last.length); if(!r)return null;
+  const best=[...last].sort((a,b)=>a-b).slice(0,r.n);
+  let hi=best.reduce((a,b)=>a+b,0)/best.length + r.adj;
+  hi=Math.round(hi*10)/10;
+  if(lowHI!=null){                       // soft cap (+3) y hard cap (+5)
+    const inc=hi-lowHI;
+    if(inc>5.0) hi=lowHI+5.0;
+    else if(inc>3.0) hi=lowHI+3.0+(inc-3.0)*0.5;
+    hi=Math.round(hi*10)/10;
+  }
+  return hi;
+}
+function whsDiffsOf(pl){return (pl.whsDiffs||[]).map(x=>(typeof x==='number')?x:x.d);}
+/* El hándicap lo lleva el sistema si está activo y el jugador tiene histórico sembrado */
+function whsAuto(pl){return S.cfg.whsActivo!==false && whsDiffsOf(pl).length>=3;}
+function recalcIndex(pl){
+  const hi=whsIndex(whsDiffsOf(pl),pl.lowHI);
+  if(hi==null)return;
+  pl.hcpExacto=hi;
+  if(pl.lowHI==null||hi<pl.lowHI)pl.lowHI=hi;
+}
+/* CR y Slope del segmento jugado */
+function segRating(tee,rec){
+  if(rec==='18')return {cr:+tee.cr,slope:+tee.slope,aprox:false};
+  const cr = rec==='ida' ? tee.cr9i : tee.cr9v;
+  const sl = rec==='ida' ? tee.slope9i : tee.slope9v;
+  if(cr!=null&&sl!=null&&+sl>0) return {cr:+cr,slope:+sl,aprox:false};
+  return {cr:(+tee.cr)/2, slope:+tee.slope, aprox:true};   // aproximación si falta el dato oficial
+}
+/* Al CERRAR una partida: cada tarjeta completa genera un diferencial */
+function whsRegistrar(j){
+  if(S.cfg.whsActivo===false)return;
+  const course=S.courses.find(c=>c.id===j.courseId); if(!course)return;
+  const tee=course.tees.find(t=>t.nombre===j.teeNombre)||course.tees[0];
+  const rec=j.recorrido||'ida';
+  const {cr,slope}=segRating(tee,rec);
+  jParticipants(j).forEach(id=>{
+    const pl=S.jugadores.find(p=>p.id===id); if(!pl)return;
+    const res=j.resultados.find(r=>r.jugadorId===id); if(!res)return;
+    const m=medalCalc(res,course,tee,pl.hcpExacto,rec);
+    if(!m.completo)return;
+    const ags=adjustedGross(res,course,m.idxs,m.sMap);
+    const hiDia=(res.hcpSnap!=null)?res.hcpSnap:pl.hcpExacto;
+    let d=scoreDifferential(ags,cr,slope,S.cfg.pcc);
+    if(d==null)return;
+    if(rec!=='18') d=d+expected9(hiDia);      // escalado 9 → 18 (WHS 2024)
+    d=Math.round(d*10)/10;
+    pl.whsDiffs=pl.whsDiffs||[];
+    pl.whsDiffs.push({d,jid:j.id,fecha:j.fecha,rec});
+    recalcIndex(pl);
+  });
+}
+/* Al REABRIR: se retira el diferencial de esa partida */
+function whsQuitar(j){
+  S.jugadores.forEach(pl=>{
+    if(!pl.whsDiffs||!pl.whsDiffs.length)return;
+    const antes=pl.whsDiffs.length;
+    pl.whsDiffs=pl.whsDiffs.filter(x=>!(x&&x.jid===j.id));
+    if(pl.whsDiffs.length!==antes)recalcIndex(pl);
+  });
+}
+
 function medalCalc(res,course,tee,fallbackHi,rec){
   const hi=(res.hcpSnap!=null)?res.hcpSnap:(fallbackHi||0);
-  const phFull=playingHandicap(hi,course,tee);
   const idxs=recIdx(rec), nH=idxs.length;
-  const phSeg = nH===18 ? phFull : Math.round(phFull/2);   // 9 hoyos = medio hándicap
-  const sMap=segStrokes(course,idxs,phSeg);
-  let grossT=0,played=0,parSeg=0;
-  idxs.forEach(i=>{const g=+(res.hoyos?.[i])||0; parSeg+=course.hoyos[i].par; if(g>0){grossT+=g;played++;}});
-  const completo=played===nH;
+  let parSeg=0; idxs.forEach(i=>parSeg+=course.hoyos[i].par);
+  const phFull=playingHandicap(hi,course,tee);      // hándicap de juego de 18 hoyos
+  /* Se reparte por índice de golpe sobre los 18 hoyos y se cuentan los que
+     caen en el recorrido jugado. En Pineda la vuelta lleva los índices impares
+     y la ida los pares, así que un hcp impar da un golpe más en la vuelta. */
+  const sMap={}; let phSeg=0;
+  idxs.forEach(i=>{
+    const s=strokesOnHole(phFull,course.hoyos[i].si);
+    sMap[i]=s; phSeg+=s;
+  });
+  let grossT=0,played=0;
+  idxs.forEach(i=>{const g=+(res.hoyos?.[i])||0; if(g>0){grossT+=g;played++;}});
+  /* Retirada por lesión o motivo justificado: los hoyos sin jugar se valoran a
+     PAR NETO (par + golpes recibidos), así aportan 0 y la ronda cuenta igual.
+     Hace falta haber jugado al menos la mitad del recorrido. */
+  const minH=Math.ceil(nH/2);
+  const ret=res.retirada&&res.retirada.activa;
+  let completo=played===nH, retirado=false;
+  if(!completo&&ret&&played>=minH){
+    idxs.forEach(i=>{ if(!(+(res.hoyos?.[i])>0)) grossT+=course.hoyos[i].par+(sMap[i]||0); });
+    completo=true; retirado=true;
+  }
   const neto=completo?(grossT-phSeg):null;
   const pts=completo?(neto-parSeg):null;   // vs par; MENOS es mejor
-  return {phFull,ph:phSeg,phSeg,idxs,nH,rec:(rec||'18'),parSeg,grossT,played,completo,neto,pts,sMap,hi};
+  return {phFull,ph:phSeg,phSeg,idxs,nH,rec:(rec||'18'),parSeg,grossT,played,completo,retirado,minH,neto,pts,sMap,hi};
 }
 
 
@@ -559,7 +668,7 @@ function render(){
   try{LS.setItem(KEY,JSON.stringify(S));}catch(e){}
 }
 
-/* Puntos por partida: (neto − par); el ganador (neto más bajo) RESTA el bonus */
+/* Puntos por partida: solo el resultado medal (golpes − objetivo). Sin bonus por ganar. */
 function jornadaPuntos(j){
   const course=S.courses.find(c=>c.id===j.courseId); if(!course)return {};
   const tee=course.tees.find(t=>t.nombre===j.teeNombre)||course.tees[0];
@@ -573,31 +682,34 @@ function jornadaPuntos(j){
     if(m.completo) cards[id]={pts:m.pts,neto:m.neto,rec};
   });
   const netos=Object.values(cards).map(c=>c.neto);
-  if(netos.length>=2){
+  if(netos.length>=2){                       // marca al ganador (solo informativo)
     const best=Math.min(...netos);
-    const winners=Object.keys(cards).filter(id=>cards[id].neto===best);
-    const bonus=+S.cfg.puntosVictoria||0;
-    const each=winners.length>1?Math.round(bonus/winners.length*10)/10:bonus;
-    winners.forEach(id=>{cards[id].pts=Math.round((cards[id].pts-each)*10)/10; cards[id].win=true;}); // resta
+    Object.keys(cards).filter(id=>cards[id].neto===best).forEach(id=>{cards[id].win=true;});
   }
   return cards;
 }
 function playerRows(){
-  const closed=S.jornadas.filter(j=>j.cerrada);
+  const minJug=+S.cfg.minJugadores||3;
+  const maxR=+S.cfg.maxRondas||16;
+  const cuentan=+S.cfg.cuentanMejores||8;
+  /* Solo partidas cerradas, en orden cronológico y con el mínimo de jugadores */
+  const validas=S.jornadas.filter(j=>j.cerrada)
+    .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''))
+    .map(j=>({j,cards:jornadaPuntos(j)}))
+    .filter(x=>Object.keys(x.cards).length>=minJug);
   return S.jugadores.map(pl=>{
-    const per=[]; let victorias=0, ida=0, vuelta=0;
-    closed.forEach(j=>{
-      const c=jornadaPuntos(j)[pl.id]; if(!c)return;
+    const per=[]; let victorias=0, ida=0, vuelta=0, fuera=0;
+    validas.forEach(({j,cards})=>{
+      const c=cards[pl.id]; if(!c)return;
+      if(per.length>=maxR){fuera++;return;}      // pasado el tope de rondas
       per.push(c.pts); if(c.win)victorias++;
       const rec=j.recorrido||'ida';
       if(rec==='ida'||rec==='18')ida++;
       if(rec==='vuelta'||rec==='18')vuelta++;
     });
-    const d=+S.cfg.descartes||0;
-    const worst=[...per].sort((a,b)=>b-a); // peores = pts más altos
-    const dropSum=(d>0?worst.slice(0,Math.min(d,per.length)):[]).reduce((a,b)=>a+b,0);
-    const total=Math.round((per.reduce((a,b)=>a+b,0)-dropSum)*10)/10;
-    return {pl,jugadas:per.length,victorias,ida,vuelta,total};
+    const mejores=[...per].sort((a,b)=>a-b).slice(0,cuentan);   // las N mejores (menos es mejor)
+    const total=Math.round(mejores.reduce((a,b)=>a+b,0)*10)/10;
+    return {pl,jugadas:per.length,cuentan:mejores.length,victorias,ida,vuelta,total,fuera};
   });
 }
 function renderStandings(){
@@ -609,10 +721,11 @@ function renderStandings(){
   const all=playerRows().sort((a,b)=>a.total-b.total||a.jugadas-b.jugadas); // MENOS es mejor
   const ok=all.filter(elig);
   const pend=all.filter(r=>!elig(r));
-  const d=+S.cfg.descartes||0;
+  const cuentan=+S.cfg.cuentanMejores||8;
+  const maxR=+S.cfg.maxRondas||16;
   const nCerr=S.jornadas.filter(j=>j.cerrada).length;
   sub.textContent=(nCerr?`${nCerr} partida${nCerr>1?'s':''} cerrada${nCerr>1?'s':''}`:'Aún sin partidas cerradas')
-    +` · menos es mejor · mín. ${minR} rondas y ${minN}×vuelta`+(d?` · ${d} descarte${d>1?'s':''}`:'');
+    +` · cuentan las ${cuentan} mejores · mín. ${minR} rondas`;
   const faltaTxt=r=>{const f=[];if(r.jugadas<minR)f.push(`${minR-r.jugadas} ronda${minR-r.jugadas>1?'s':''}`);
     if(r.ida<minN)f.push(`${minN-r.ida} ida`);if(r.vuelta<minN)f.push(`${minN-r.vuelta} vuelta`);return f.length?`faltan ${f.join(', ')}`:'';};
   const row=(r,i,dim)=>`
@@ -620,7 +733,7 @@ function renderStandings(){
       <div class="pos">${dim?'·':i+1}</div>
       <div class="player-cell">
         <div class="name">${esc(r.pl.nombre)}</div>
-        <div class="meta">${r.jugadas} ronda${r.jugadas!==1?'s':''} · I${r.ida}/V${r.vuelta} · ${r.victorias} vic${dim?` · ${faltaTxt(r)}`:''}</div>
+        <div class="meta">Hcp ${r.pl.hcpExacto!=null?fmt(r.pl.hcpExacto):'—'} · ${r.jugadas}/${maxR} rondas${r.cuentan?` · cuentan ${r.cuentan}`:''} · I${r.ida}/V${r.vuelta}${dim?` · ${faltaTxt(r)}`:''}</div>
       </div>
       <div class="pts-cell"><div class="pts num">${fmt1(r.total)}</div><div class="lbl">Puntos</div></div>
     </div>`;
@@ -677,7 +790,7 @@ function renderPlayers(){
     return `<div class="li">
       <div class="info">
         <div class="t">${esc(p.nombre)}</div>
-        <div class="s">Hcp ${tiene?fmt(p.hcpExacto):'sin poner'}${p.licencia?` · Lic. ${esc(p.licencia)}`:''}${tiene&&course?` · juego ${ph}`:''}${p.pin?' · PIN '+esc(p.pin):' · sin PIN (lo crea al entrar)'}</div>
+        <div class="s">Hcp ${tiene?fmt(p.hcpExacto):'sin poner'}${p.licencia?` · Lic. ${esc(p.licencia)}`:''}${tiene&&course?` · juego ${ph}`:''} · ${whsDiffsOf(p).length}/20 dif.${p.pin?' · PIN '+esc(p.pin):''}</div>
       </div>
       <div class="actions">
         <button class="icon-btn" onclick="openPlayer('${p.id}')">✎</button>
@@ -708,15 +821,28 @@ ov.addEventListener('click',e=>{if(e.target===ov)closeModal();});
 function openPlayer(id){
   if(!isAdmin())return;
   const p=id?S.jugadores.find(x=>x.id===id):{nombre:'',licencia:'',hcpExacto:'',pin:''};
+  const dl=whsDiffsOf(p);
   openModal(`
     <div class="modal-head"><h3>${id?'Editar':'Nuevo'} jugador</h3><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Nombre</label><input id="pNombre" value="${esc(p.nombre)}" placeholder="Nombre y apellidos"></div>
     <div class="row-2">
-      <div class="field"><label>Hándicap fijo de liga</label><input id="pHcp" type="number" step="0.1" value="${p.hcpExacto??''}" placeholder="lo pone el jugador"></div>
+      <div class="field"><label>Hándicap actual</label><input id="pHcp" type="number" step="0.1" value="${p.hcpExacto??''}" placeholder="11.4"></div>
       <div class="field"><label>PIN</label><input id="pPin" value="${esc(p.pin||'')}" placeholder="vacío = lo crea el jugador"></div>
     </div>
     <div class="field"><label>Licencia RFEG</label><input id="pLic" value="${esc(p.licencia||'')}" placeholder="opcional"></div>
-    <div class="hint">Si se deja vacío, el jugador lo pondrá al entrar. Cada jugador puede actualizar el suyo en cada partida nueva.</div>
+    <div style="border-top:1px solid var(--border);margin:18px 0 14px;padding-top:14px">
+      <label style="display:block;font-size:12px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;font-weight:500;margin-bottom:6px">Histórico WHS · siembra de la RFEG</label>
+      <div class="field"><label>Los 20 diferenciales (del más antiguo al más reciente)</label>
+        <textarea id="pDiffs" rows="4" placeholder="29.9, 17.6, 23.1, 18.1, 22.1, 16.0, …"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;outline:none;font-family:inherit;font-size:14px">${dl.join(', ')}</textarea>
+        <div class="hint">Cópialos de la hoja de cálculo del hándicap de la RFEG (columna DIFERENCIAL). Separados por comas o saltos de línea.</div>
+      </div>
+      <div class="field"><label>Hándicap más bajo (últimos 12 meses)</label>
+        <input id="pLow" type="number" step="0.1" value="${p.lowHI??''}" placeholder="12.0">
+        <div class="hint">Sale en la misma hoja de la RFEG. Se usa solo para los topes de subida.</div>
+      </div>
+      ${dl.length?`<div class="banner" style="margin:0"><span>✓</span><div><b>${dl.length} diferenciales cargados.</b> Índice calculado: <b>${fmt(whsIndex(dl,p.lowHI)??0)}</b></div></div>`:''}
+    </div>
     <div class="modal-foot">
       ${id?`<button class="btn btn-danger" onclick="delPlayer('${id}',true)">Eliminar</button>`:''}
       <button class="btn btn-pine" onclick="savePlayer('${id||''}')">Guardar</button>
@@ -728,8 +854,25 @@ function savePlayer(id){
   const hcp=hcpRaw===''?null:parseFloat(hcpRaw);
   if(!nombre)return toast('Falta el nombre');
   if(hcpRaw!==''&&isNaN(hcp))return toast('Hándicap no válido');
-  if(id){const _p=S.jugadores.find(x=>x.id===id);if(_p)Object.assign(_p,{nombre,hcpExacto:hcp,licencia:lic,pin});}
-  else S.jugadores.push({id:uid(),nombre,hcpExacto:hcp,licencia:lic,pin});
+  const rawD=(document.getElementById('pDiffs')?document.getElementById('pDiffs').value:'')||'';
+  const diffs=rawD.split(/[\s,;]+/).map(s=>parseFloat(s)).filter(v=>!isNaN(v));
+  const rawLow=(document.getElementById('pLow')?document.getElementById('pLow').value:'')||'';
+  const low=rawLow===''?null:parseFloat(rawLow);
+  let pl;
+  if(id){pl=S.jugadores.find(x=>x.id===id);if(pl)Object.assign(pl,{nombre,hcpExacto:hcp,licencia:lic,pin});}
+  else {pl={id:uid(),nombre,hcpExacto:hcp,licencia:lic,pin};S.jugadores.push(pl);}
+  if(pl){
+    pl.lowHI=(low!=null&&!isNaN(low))?low:null;
+    const prev=pl.whsDiffs||[];
+    // conserva la trazabilidad de los que vinieron de partidas de la liga
+    if(diffs.length){
+      pl.whsDiffs=diffs.map((d,i)=>{
+        const old=prev[i];
+        return (old&&typeof old==='object'&&old.jid&&Math.round(old.d*10)===Math.round(d*10))?old:{d};
+      });
+      recalcIndex(pl);
+    } else pl.whsDiffs=[];
+  }
   save();closeModal();render();toast('Guardado');
 }
 function delPlayer(id,fromModal){
@@ -769,7 +912,7 @@ function openJornada(id){
     </select></div>
     <label style="font-size:12px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;font-weight:500">¿Quién juega?</label>
     <div style="margin:6px 0 4px">${checks}</div>
-    <div class="hint">Marca contra quién juegas. Solo los marcados meten tarjeta en esta partida.</div>
+    <div class="hint">Marca contra quién juegas. Hacen falta al menos ${S.cfg.minJugadores||3} jugadores para que la partida cuente en la liga.</div>
     <div class="modal-foot">
       ${id?`<button class="btn btn-danger" onclick="delJornada('${id}')">Eliminar</button>`:''}
       <button class="btn btn-pine" onclick="saveJornada('${id||''}','${creador||''}')">Guardar</button>
@@ -784,7 +927,8 @@ function saveJornada(id,creador){
   if(!fecha)return toast('Falta la fecha');
   let participantes=[...document.querySelectorAll('.jPart:checked')].map(i=>i.value);
   if(creador&&!participantes.includes(creador))participantes.unshift(creador);
-  if(participantes.length<2)return toast('Marca al menos a un rival');
+  const minJ=+S.cfg.minJugadores||3;
+  if(participantes.length<minJ)return toast(`Mínimo ${minJ} jugadores para que la partida cuente`);
   if(id){Object.assign(S.jornadas.find(x=>x.id===id),{fecha,courseId,teeNombre,recorrido,participantes});}
   else S.jornadas.push({id:uid(),fecha,courseId,teeNombre,recorrido,creadorId:creador||null,participantes,cerrada:false,resultados:[]});
   save();fbPushJornada(S.jornadas.find(x=>x.id===id)||S.jornadas[S.jornadas.length-1]);closeModal();render();toast('Partida guardada');
@@ -853,14 +997,16 @@ function medalTag(m){
   return d===0?'PAR':(d>0?'+'+d:String(d));
 }
 function totalsLine(m){
-  return `Golpes <b>${m.grossT||'—'}</b> · Neto <b>${m.completo?m.neto:'—'}</b> · vs par <b>${m.completo?medalTag(m):'—'}</b> · Hoyos <b>${m.played}/${m.nH}</b> · Puntos <b>${m.completo?fmt1(m.pts):'—'}</b>`;
+  const obj=m.parSeg+m.ph;   // par del recorrido + golpes que recibes
+  return `Golpes <b>${m.grossT||'—'}</b>${m.retirado?' <span class="hint" style="margin:0">(con par neto)</span>':''} · Objetivo <b>${obj}</b> (par ${m.parSeg}+${m.ph}) · Resultado <b>${m.completo?medalTag(m):'—'}</b> · Hoyos <b>${m.played}/${m.nH}</b> · Puntos <b>${m.completo?fmt1(m.pts):'—'}</b>`;
 }
 function scorePlayerHTML(pl,res,j,course,tee){
   const rec=j.recorrido||'ida';
   const m=medalCalc(res,course,tee,pl.hcpExacto,rec);
   const ph=m.phSeg;
   const editable=canEdit(j,pl.id)&&(pl.hcpExacto!=null||res.hcpSnap!=null);
-  const puedeHcp=!j.cerrada&&(isAdmin()||myId()===pl.id);
+  const auto=whsAuto(pl);
+  const puedeHcp=!j.cerrada&&(isAdmin()||(myId()===pl.id&&!auto));
   const snap=(res.hcpSnap!=null)?res.hcpSnap:pl.hcpExacto;
   const cell=(i)=>{
     const h=course.hoyos[i];const g=res.hoyos[i]??'';
@@ -877,24 +1023,67 @@ function scorePlayerHTML(pl,res,j,course,tee){
   return `<div class="score-player" id="sp-${pl.id}">
     <div class="sp-head" onclick="toggleSP('${pl.id}')">
       <div><span class="n">${esc(pl.nombre)}</span><span class="ph">${recShort(rec)} · hcp ${snap!=null?fmt(snap):'—'} · juego ${ph}</span>${pl.id===myId()?'<span class="locktag">tú</span>':''}</div>
-      <div class="stb num" id="stb-${pl.id}">${medalTag(m)}</div>
+      <div class="stb num" id="stb-${pl.id}">${m.retirado?'<span class="chip closed" style="font-size:10px">retirado</span> ':''}${medalTag(m)}</div>
     </div>
     <div class="sp-body" id="body-${pl.id}">
       ${puedeHcp?`<div class="snap-field"><label>${myId()===pl.id?'Mi hcp para esta partida':'Hcp este día'}</label>
         <input type="number" step="0.1" value="${snap??''}" onchange="onSnap('${pl.id}',this.value)">
-        <span class="hint" style="margin:0">${myId()===pl.id?'si has subido o bajado, actualízalo aquí':'corrección puntual'}</span></div>`:''}
+        <span class="hint" style="margin:0">${isAdmin()&&auto?'corrección solo para esta partida':'ponlo si ha cambiado'}</span></div>`
+      :(auto?`<div class="snap-field"><label>Hándicap</label>
+        <b style="font-size:16px;color:var(--pine)">${snap!=null?fmt(snap):'—'}</b>
+        <span class="hint" style="margin:0">automático · se recalcula al cerrar la partida</span></div>`:'')}
       ${grid}
+      ${retiradaBox(pl,res,m,editable)}
       <div class="sp-totals" id="tot-${pl.id}">${totalsLine(m)}</div>
     </div></div>`;
 }
 function toggleSP(pid){document.getElementById('body-'+pid).classList.toggle('open');}
+/* --- Retirada por lesión / trabajo / otro --- */
+function retiradaBox(pl,res,m,editable){
+  const mot=(res.retirada&&res.retirada.motivo)||'';
+  if(m.retirado) return `<div class="ret-box marcada" id="ret-${pl.id}">
+      <span class="chip closed">⚠ No terminó · ${esc(mot||'sin motivo')}</span>
+      <span class="hint" style="margin:0">Jugó ${m.played}/${m.nH}. El resto va a par neto y suma 0.</span>
+      ${editable?`<button class="btn btn-sm" onclick="quitarRetirada('${pl.id}')">Deshacer</button>`:''}
+    </div>`;
+  if(!editable||m.played===0||m.played>=m.nH) return `<div id="ret-${pl.id}"></div>`;
+  if(m.played<m.minH) return `<div class="ret-box" id="ret-${pl.id}">
+      <span class="hint" style="margin:0">Para marcar que no terminas hacen falta al menos ${m.minH} hoyos (llevas ${m.played}).</span>
+    </div>`;
+  return `<div class="ret-box" id="ret-${pl.id}">
+      <button class="btn btn-sm" onclick="pedirMotivo('${pl.id}')">⚠ No puedo terminar</button>
+      <span class="hint" style="margin:0">Llevas ${m.played}/${m.nH} hoyos</span>
+    </div>`;
+}
+function pedirMotivo(pid){
+  const el=document.getElementById('ret-'+pid); if(!el)return;
+  el.innerHTML=`<span class="hint" style="margin:0;width:100%">¿Por qué no terminas?</span>
+    <button class="btn btn-sm" onclick="marcarRetirada('${pid}','Lesión')">Lesión</button>
+    <button class="btn btn-sm" onclick="marcarRetirada('${pid}','Trabajo')">Trabajo</button>
+    <button class="btn btn-sm btn-ghost" onclick="rebuildScorePlayer('${pid}')">Cancelar</button>`;
+}
+function marcarRetirada(pid,motivo){
+  const j=S.jornadas.find(x=>x.id===window._sc.jid);
+  const res=j.resultados.find(r=>r.jugadorId===pid); if(!res||!canEdit(j,pid))return;
+  res.retirada={activa:true,motivo};
+  save();fbPushCard(window._sc.jid,pid);rebuildScorePlayer(pid);
+  toast('Marcado: '+motivo+' · la ronda cuenta igual');
+}
+function quitarRetirada(pid){
+  const j=S.jornadas.find(x=>x.id===window._sc.jid);
+  const res=j.resultados.find(r=>r.jugadorId===pid); if(!res||!canEdit(j,pid))return;
+  res.retirada=null;
+  save();fbPushCard(window._sc.jid,pid);rebuildScorePlayer(pid);
+}
 function onSnap(pid,v){
   const j=S.jornadas.find(x=>x.id===window._sc.jid);
   const res=j.resultados.find(r=>r.jugadorId===pid);
+  const pl=S.jugadores.find(x=>x.id===pid);
   const nv=v===''?null:Math.round(parseFloat(v)*10)/10;
   res.hcpSnap=nv;
-  // Si el jugador edita SU hándicap, pasa a ser su hcp actual para las próximas partidas
-  if(nv!=null&&myId()===pid){const p=S.jugadores.find(x=>x.id===pid);if(p)p.hcpExacto=nv;}
+  /* Solo se arrastra al hcp del jugador si NO lo lleva el WHS (jugadores sin histórico).
+     Con histórico sembrado, el índice lo calcula el sistema al cerrar cada partida. */
+  if(nv!=null&&myId()===pid&&pl&&!whsAuto(pl)) pl.hcpExacto=nv;
   save();fbPushCard(window._sc.jid,pid);rebuildScorePlayer(pid);
 }
 function rebuildScorePlayer(pid){
@@ -937,17 +1126,26 @@ function cerrarJornada(jid){
   if(!isAdmin()&&!parts.includes(myId()))return;
   const idxs=recIdx(j.recorrido||'ida'), nH=idxs.length;
   const cnt=r=>idxs.filter(i=>+(r&&r.hoyos?r.hoyos[i]:0)>0).length;
+  const retOk=r=>!!(r&&r.retirada&&r.retirada.activa&&cnt(r)>=Math.ceil(nH/2));
   const sinTarjeta=parts.filter(id=>{const r=j.resultados.find(x=>x.jugadorId===id);return cnt(r)===0;});
-  const incompletas=parts.filter(id=>{const r=j.resultados.find(x=>x.jugadorId===id);const n=cnt(r);return n>0&&n<nH;});
-  if(sinTarjeta.length&&!confirm('Hay jugadores sin tarjeta. ¿Cerrar igualmente? (solo puntuarán las tarjetas completas)'))return;
-  if(incompletas.length&&!confirm('Hay tarjetas con menos de 18 hoyos: en medal NO puntuarán. ¿Cerrar igualmente?'))return;
-  j.cerrada=true;save();fbPushJornada(j);closeModal();render();toast('Partida cerrada: ya puntúa en la clasificación');
+  const incompletas=parts.filter(id=>{const r=j.resultados.find(x=>x.jugadorId===id);const n=cnt(r);return n>0&&n<nH&&!retOk(r);});
+  const validas=parts.filter(id=>{const r=j.resultados.find(x=>x.jugadorId===id);return cnt(r)===nH||retOk(r);}).length;
+  const minJ=+S.cfg.minJugadores||3;
+  if(sinTarjeta.length&&!confirm('Hay jugadores sin tarjeta. ¿Cerrar igualmente? (solo puntuarán las tarjetas válidas)'))return;
+  if(incompletas.length&&!confirm(`Hay tarjetas sin terminar los ${nH} hoyos y sin marcar retirada: NO puntuarán. ¿Cerrar igualmente?`))return;
+  if(validas<minJ&&!confirm(`Solo hay ${validas} tarjeta(s) válida(s) y hacen falta ${minJ} para que la partida cuente en la liga. ¿Cerrar igualmente?`))return;
+  j.cerrada=true;
+  whsRegistrar(j);
+  save();fbPushJornada(j);if(fb.ready)fbPushState();closeModal();render();
+  toast('Partida cerrada: puntúa y actualiza hándicaps');
 }
 function reabrirJornada(jid){
   if(!isAdmin())return;
   if(!confirm('¿Reabrir la partida? Dejará de puntuar hasta que se vuelva a cerrar.'))return;
   const j=S.jornadas.find(x=>x.id===jid);
-  j.cerrada=false;save();fbPushJornada(j);closeModal();render();toast('Partida reabierta');
+  whsQuitar(j);
+  j.cerrada=false;save();fbPushJornada(j);if(fb.ready)fbPushState();closeModal();render();
+  toast('Partida reabierta · hándicaps revertidos');
 }
 
 /* --- Campo (admin) --- */
@@ -960,11 +1158,22 @@ function openCourse(id){
 }
 function openCourseFromObj(c,id){
   window._editCourse=c;
-  const teeRows=c.tees.map((t,i)=>`<div class="tee-row">
-      <input value="${esc(t.nombre)}" placeholder="Barras" data-tee="${i}" data-f="nombre">
-      <input type="number" value="${t.slope}" placeholder="Slope" data-tee="${i}" data-f="slope">
-      <input type="number" step="0.1" value="${t.cr}" placeholder="CR" data-tee="${i}" data-f="cr">
-      <button class="icon-btn" onclick="removeTee(${i})">✕</button></div>`).join('');
+  const teeRows=c.tees.map((t,i)=>`<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div class="tee-row">
+        <input value="${esc(t.nombre)}" placeholder="Barras" data-tee="${i}" data-f="nombre">
+        <input type="number" value="${t.slope}" placeholder="Slope" data-tee="${i}" data-f="slope">
+        <input type="number" step="0.1" value="${t.cr}" placeholder="CR" data-tee="${i}" data-f="cr">
+        <button class="icon-btn" onclick="removeTee(${i})">✕</button>
+      </div>
+      <div style="font-size:11px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin:10px 0 6px">Valoración de 9 hoyos (para el hándicap)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <input type="number" step="0.1" value="${t.cr9i??''}" placeholder="CR ida" data-tee="${i}" data-f="cr9i">
+        <input type="number" value="${t.slope9i??''}" placeholder="Slope ida" data-tee="${i}" data-f="slope9i">
+        <input type="number" step="0.1" value="${t.cr9v??''}" placeholder="CR vuelta" data-tee="${i}" data-f="cr9v">
+        <input type="number" value="${t.slope9v??''}" placeholder="Slope vuelta" data-tee="${i}" data-f="slope9v">
+      </div>
+      <div class="hint">Pídeselos al club. Si los dejas vacíos, se aproxima con la mitad del CR de 18 y el mismo slope.</div>
+    </div>`).join('');
   let hoyoRows='';for(let i=0;i<18;i++){const h=c.hoyos[i];
     hoyoRows+=`<tr><td>${i+1}</td><td><input type="number" value="${h.par}" data-hoyo="${i}" data-f="par"></td>
       <td><input type="number" value="${h.si}" min="1" max="18" data-hoyo="${i}" data-f="si"></td></tr>`;}
@@ -987,7 +1196,11 @@ function openCourseFromObj(c,id){
 function collectCourse(){
   const c=window._editCourse;
   c.nombre=val('cNombre');
-  document.querySelectorAll('[data-tee]').forEach(inp=>{const t=c.tees[+inp.dataset.tee];if(t)t[inp.dataset.f]=inp.dataset.f==='nombre'?inp.value:parseFloat(inp.value)||0;});
+  document.querySelectorAll('[data-tee]').forEach(inp=>{const t=c.tees[+inp.dataset.tee];if(!t)return;
+    const f=inp.dataset.f;
+    if(f==='nombre'){t[f]=inp.value;return;}
+    if(f==='cr9i'||f==='slope9i'||f==='cr9v'||f==='slope9v'){t[f]=inp.value===''?null:(parseFloat(inp.value)||null);return;}
+    t[f]=parseFloat(inp.value)||0;});
   document.querySelectorAll('[data-hoyo]').forEach(inp=>{const h=c.hoyos[+inp.dataset.hoyo];h[inp.dataset.f]=parseInt(inp.value)||0;});
   c.verificado=document.getElementById('cVerif').checked;
 }
@@ -1011,9 +1224,9 @@ function fillCfg(){
   const g=id=>document.getElementById(id);
   g('cfgNombre').value=S.cfg.nombre||'';g('cfgTemporada').value=S.cfg.temporada||'';
   g('cfgAdminPass').value=S.cfg.adminPass||'';g('cfgHcp').value=S.cfg.hcpMethod||'whs';
-  g('cfgAllowance').value=S.cfg.allowance??100;g('cfgDescartes').value=S.cfg.descartes??0;
-  g('cfgMinTarjetas').value=S.cfg.minTarjetas??5;g('cfgMinPorNine').value=S.cfg.minPorNine??2;g('cfgGala').value=S.cfg.galaCorte??6;
-  g('cfgVictoria').value=S.cfg.puntosVictoria??1;
+  g('cfgAllowance').value=S.cfg.allowance??100;
+  g('cfgMinTarjetas').value=S.cfg.minTarjetas??8;g('cfgMinPorNine').value=S.cfg.minPorNine??2;g('cfgGala').value=S.cfg.galaCorte??6;
+  g('cfgCuentan').value=S.cfg.cuentanMejores??8;g('cfgMaxRondas').value=S.cfg.maxRondas??16;g('cfgMinJug').value=S.cfg.minJugadores??3;
   g('cfgSyncUrl').value=S.cfg.syncUrl||'';
   updateSyncStatus();
 }
@@ -1022,9 +1235,8 @@ function saveCfg(){
   Object.assign(S.cfg,{
     nombre:g('cfgNombre'),temporada:g('cfgTemporada'),adminPass:g('cfgAdminPass').trim(),
     hcpMethod:g('cfgHcp'),allowance:Math.min(100,Math.max(0,+g('cfgAllowance')||0)),
-    descartes:Math.max(0,+g('cfgDescartes')||0),
     minTarjetas:Math.max(0,+g('cfgMinTarjetas')||0),minPorNine:Math.max(0,+g('cfgMinPorNine')||0),galaCorte:Math.max(0,+g('cfgGala')||0),
-    puntosVictoria:Math.max(0,+g('cfgVictoria')||0),
+    cuentanMejores:Math.max(1,+g('cfgCuentan')||8),maxRondas:Math.max(1,+g('cfgMaxRondas')||16),minJugadores:Math.max(2,+g('cfgMinJug')||3),
     syncUrl:g('cfgSyncUrl').trim()
   });
   document.getElementById('syncBtn').style.display=(fbEnabled()||S.cfg.syncUrl)?'':'none';
@@ -1054,7 +1266,8 @@ function fbPushJornada(j){ if(!fb.ready||!j)return;
 function fbPushCard(jid,pid){ if(!fb.ready)return;
   const j=S.jornadas.find(x=>x.id===jid); const r=j&&(j.resultados||[]).find(x=>x.jugadorId===pid); if(!r)return;
   fb.db.ref('liga/cards/'+jid+'/'+pid).set({hcpSnap:(r.hcpSnap==null?null:r.hcpSnap),
-    hoyos:(r.hoyos||[]).map(v=>(v===''||v==null)?'':v)}).catch(()=>{}); }
+    hoyos:(r.hoyos||[]).map(v=>(v===''||v==null)?'':v),
+    retirada:r.retirada||null}).catch(()=>{}); }
 function fbPushCardDeb(jid,pid){ if(!fb.ready)return; const k=jid+'|'+pid; clearTimeout(cardT[k]); cardT[k]=setTimeout(()=>fbPushCard(jid,pid),500); }
 function fbRemove(path){ if(fb.ready)fb.db.ref(path).remove().catch(()=>{}); }
 function fbPushAll(){ if(!fb.ready)return; fbPushState();
@@ -1073,7 +1286,7 @@ function mergeRemote(v){
     teeNombre:j.teeNombre||'',creadorId:j.creadorId||null,cerrada:!!j.cerrada,participantes:normArr(j.participantes),resultados:[]});});
   const cd=v.cards||{};
   s.jornadas.forEach(j=>{const jc=cd[j.id]; if(jc)Object.keys(jc).forEach(pid=>{const c=jc[pid];
-    j.resultados.push({jugadorId:pid,hcpSnap:(c.hcpSnap==null?null:c.hcpSnap),hoyos:normHoyos(c.hoyos)});});});
+    j.resultados.push({jugadorId:pid,hcpSnap:(c.hcpSnap==null?null:c.hcpSnap),hoyos:normHoyos(c.hoyos),retirada:c.retirada||null});});});
   return s;
 }
 function applyRemote(v){
