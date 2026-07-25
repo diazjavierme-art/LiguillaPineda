@@ -197,7 +197,7 @@ input,select{font-family:inherit;font-size:15px}
 .spon-bar{position:fixed;left:0;right:0;z-index:29;max-width:900px;margin:0 auto;
   bottom:calc(58px + env(safe-area-inset-bottom));display:flex;align-items:center;
   padding:8px 12px;background:#fff;border-top:1px solid var(--border)}
-.spon-bar .spon-strip{padding:0;margin:0;border:none;gap:10px;justify-content:flex-start}
+.spon-bar .spon-strip{padding:0;margin:0;border:none;gap:10px;justify-content:flex-start;flex:1;min-width:0}
 .spon-hoyo{margin-top:3px;display:flex;align-items:center;justify-content:center;
   height:16px;border-radius:4px;background:#fff;border:1px solid var(--border);overflow:hidden;padding:0 3px}
 .spon-hoyo.has-logo{background:#fff}
@@ -1082,14 +1082,14 @@ function sponChip(p,size,noLink){
     ? `<a class="${cls}" href="${esc(p.url)}" target="_blank" rel="noopener" style="${bg}">${cont}</a>`
     : `<span class="${cls}" style="${bg}">${cont}</span>`;
 }
+function sponMarquee(l,size){
+  const chips=l.map(p=>sponChip(p,size)).join('');
+  const dur=Math.max(14,l.length*4); // más patrocinadores → recorrido algo más largo
+  return `<div class="spon-strip spon-auto"><div class="spon-track" style="animation-duration:${dur}s">${chips}${chips}</div></div>`;
+}
 function sponStrip(u){
   const l=patrosDe(u); if(!l.length)return '';
-  if(u==='login'){
-    // en el login: desplazamiento automático hacia la izquierda, en bucle, para que se vean todos sin tocar
-    const chips=l.map(p=>sponChip(p)).join('');
-    const dur=Math.max(14,l.length*4); // más patrocinadores → recorrido algo más largo
-    return `<div class="spon-strip spon-auto"><div class="spon-track" style="animation-duration:${dur}s">${chips}${chips}</div></div>`;
-  }
+  if(u==='login')return sponMarquee(l);   // desplazamiento automático para que se vean todos sin tocar
   const noLink=(u==='tarjeta');   // en la tarjeta: logo sí, hipervínculo no
   return `<div class="spon-strip">${l.map(p=>sponChip(p,null,noLink)).join('')}</div>`;
 }
@@ -1100,7 +1100,7 @@ function sponBarra(){
   if(!l.length){el.style.display='none';document.body.style.paddingBottom='88px';return;}
   el.style.display='';
   document.body.style.paddingBottom='142px';
-  el.innerHTML=`<div class="spon-strip">${l.map(p=>sponChip(p,'sm')).join('')}</div>`;
+  el.innerHTML=sponMarquee(l,'sm');
 }
 /* --- Admin: gestión --- */
 function renderPatros(){
