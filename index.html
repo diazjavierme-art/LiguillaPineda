@@ -1894,13 +1894,14 @@ function patchApply(){
   });
   return ch;
 }
-function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone(); }
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
   if(!patchDone()){ if(patchApply())changed=true; LS.setItem(PATCH_KEY,'1'); }
   if(!bajasDone()){ const r2=bajasApply(); if(r2.changed){changed=true;removed=removed.concat(r2.removed);} LS.setItem(BAJAS_KEY,'1'); }
   if(!altasDone()){ if(altasApply())changed=true; LS.setItem(ALTAS_KEY,'1'); }
+  if(!bajas2Done()){ const r3=bajas2Apply(); if(r3.changed){changed=true;removed=removed.concat(r3.removed);} LS.setItem(BAJAS2_KEY,'1'); }
   return {changed,removed};
 }
 
@@ -1910,6 +1911,21 @@ const BAJAS_IDS=['caye','tito','carlitos'];
 function bajasDone(){ return LS.getItem(BAJAS_KEY)==='1'; }
 function bajasApply(){
   const fuera=new Set((S.jugadores||[]).filter(p=>BAJAS_IDS.includes(p.id)).map(p=>p.id));
+  if(!fuera.size)return {changed:false,removed:[]};
+  S.jugadores=(S.jugadores||[]).filter(p=>!fuera.has(p.id));
+  (S.jornadas||[]).forEach(j=>{
+    j.resultados=(j.resultados||[]).filter(r=>!fuera.has(r.jugadorId));
+    if(Array.isArray(j.participantes))j.participantes=j.participantes.filter(id=>!fuera.has(id));
+  });
+  if(sess&&sess.type==='player'&&fuera.has(sess.id)){sess=null;LS.removeItem(SESSKEY);}
+  return {changed:true,removed:[...fuera]};
+}
+
+/* Baja de Genaro: dato real que ya estaba en Firebase de antes (no vino de la siembra, así que se busca por nombre) */
+const BAJAS2_KEY='lp_bajas2_2026_07_a';
+function bajas2Done(){ return LS.getItem(BAJAS2_KEY)==='1'; }
+function bajas2Apply(){
+  const fuera=new Set((S.jugadores||[]).filter(p=>/^genaro\b/i.test((p.nombre||'').trim())).map(p=>p.id));
   if(!fuera.size)return {changed:false,removed:[]};
   S.jugadores=(S.jugadores||[]).filter(p=>!fuera.has(p.id));
   (S.jornadas||[]).forEach(j=>{
