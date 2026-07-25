@@ -1047,7 +1047,7 @@ function seedPatros(){
 function patros(){return (S.cfg.patrocinadores||[]);}
 function patrosDe(u){return patros().filter(p=>(p.ubic||[]).includes(u));}
 function patroHoyo(n){return patros().find(p=>(p.hoyos||[]).includes(n));}
-function sponChip(p,size){
+function sponChip(p,size,noLink){
   const s=size==='sm';
   const alto=s?(p.altoSm||18):(p.alto||34);
   const cls=`spon${s?' sm':''}${(p.logo||p.logoSvg)?'':' ph'}`;
@@ -1057,13 +1057,14 @@ function sponChip(p,size){
     : p.logo
     ? `<img src="${esc(p.logo)}" alt="${esc(p.nombre)}" style="max-height:${alto}px">`
     : `<span>${esc(p.nombre)}</span>`;
-  return p.url
+  return (p.url&&!noLink)
     ? `<a class="${cls}" href="${esc(p.url)}" target="_blank" rel="noopener" style="${bg}">${cont}</a>`
     : `<span class="${cls}" style="${bg}">${cont}</span>`;
 }
 function sponStrip(u){
   const l=patrosDe(u); if(!l.length)return '';
-  return `<div class="spon-strip">${l.map(p=>sponChip(p)).join('')}</div>`;
+  const noLink=(u==='tarjeta');   // en la tarjeta: logo sí, hipervínculo no
+  return `<div class="spon-strip">${l.map(p=>sponChip(p,null,noLink)).join('')}</div>`;
 }
 /* Franja rotatoria sobre la barra de pestañas */
 function sponBarra(){
@@ -1079,7 +1080,7 @@ function renderPatros(){
   const el=document.getElementById('patrosList'); if(!el)return;
   const l=patros();
   el.innerHTML=l.length?l.map(p=>`<div class="li">
-      <div class="info"><div class="t">${sponChip(p,'sm')}</div>
+      <div class="info"><div class="t">${sponChip(p,'sm',true)}</div>
         <div class="s">${(p.ubic||[]).join(' · ')||'sin ubicaciones'}${(p.hoyos||[]).length?' · hoyos '+p.hoyos.join(', '):''}</div></div>
       <div class="actions"><button class="icon-btn" onclick="openPatro('${p.id}')">✎</button>
         <button class="icon-btn" onclick="delPatro('${p.id}')">🗑</button></div>
@@ -1708,7 +1709,17 @@ function normHoyos(h){ const a=Array(18).fill('');
   return a; }
 function mergeRemote(v){
   const st=v&&v.state; if(!st)return null;
-  const s={cfg:st.cfg||seed().cfg,jugadores:st.jugadores||[],courses:st.courses||[],jornadas:[],updatedAt:st.updatedAt||0};
+  const base=seed();
+  // el estado remoto puede venir de una versión anterior y no traer todos los campos:
+  // partimos de los valores por defecto y encima ponemos lo que sí llega de Firebase
+  const cfg={...base.cfg,...(st.cfg||{})};
+  let restored=false;
+  if(!Array.isArray(cfg.patrocinadores)||!cfg.patrocinadores.length){
+    cfg.patrocinadores=base.cfg.patrocinadores; restored=true;   // sin esto desaparecerían
+  }
+  const courses=(Array.isArray(st.courses)&&st.courses.length)?st.courses:base.courses;
+  if(courses===base.courses)restored=true;
+  const s={cfg,jugadores:st.jugadores||[],courses,jornadas:[],updatedAt:st.updatedAt||0,_restored:restored};
   const jo=v.jornadas||{};
   Object.keys(jo).forEach(id=>{const j=jo[id];s.jornadas.push({id,fecha:j.fecha||'',courseId:j.courseId||'',
     teeNombre:j.teeNombre||'',creadorId:j.creadorId||null,cerrada:!!j.cerrada,participantes:normArr(j.participantes),resultados:[]});});
@@ -1729,6 +1740,8 @@ function applyRemote(v){
     if(lr&&mj){const i=mj.resultados.findIndex(r=>r.jugadorId===myId());if(i>=0)mj.resultados[i]=lr;else mj.resultados.push(lr);}
   }
   S=merged; persistLocal();
+  // si el remoto venía incompleto (p. ej. sin patrocinadores) lo subimos ya completo
+  if(fb.ready&&merged._restored)fbPushState();
   // limpieza puntual sobre el estado remoto (una sola vez; después se sube ya limpio)
   if(fb.ready&&maintPending()){
     const r=maintAll();
