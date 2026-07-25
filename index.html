@@ -1884,12 +1884,13 @@ function patchApply(){
   });
   return ch;
 }
-function maintPending(){ return !maintDone()||!patchDone()||!bajasDone(); }
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
   if(!patchDone()){ if(patchApply())changed=true; LS.setItem(PATCH_KEY,'1'); }
   if(!bajasDone()){ const r2=bajasApply(); if(r2.changed){changed=true;removed=removed.concat(r2.removed);} LS.setItem(BAJAS_KEY,'1'); }
+  if(!altasDone()){ if(altasApply())changed=true; LS.setItem(ALTAS_KEY,'1'); }
   return {changed,removed};
 }
 
@@ -1907,6 +1908,23 @@ function bajasApply(){
   });
   if(sess&&sess.type==='player'&&fuera.has(sess.id)){sess=null;LS.removeItem(SESSKEY);}
   return {changed:true,removed:[...fuera]};
+}
+
+/* Alta puntual de jugadores nuevos (una sola vez cada uno; si el admin los borra luego, no reaparecen) */
+const ALTAS_KEY='lp_altas_2026_07_a';
+const ALTAS_JUGADORES=[
+  {id:'carlos_lastra',nombre:'Carlos de la Lastra García-Pinillos',hcpExacto:14.7,licencia:'487823',pin:'',
+    whsDiffs:[29.0,18.4,24.3,25.1,17.3,23.9,22.6,19.1,18.4,15.1,20.1,20.1,20.1,19.8,19.2,18.4,16.8,8.2,8.8].map(d=>({d}))},
+  {id:'vicente_maesso',nombre:'Vicente Maesso Loscertales',hcpExacto:10.3,licencia:'234891',pin:'',
+    whsDiffs:[22.9,18.1,15.6,16.1,20.2,16.1,18.3,12.8,8.9,8.6,11.2,15.3,14.9,13.7,14.9,10.0].map(d=>({d}))}
+];
+function altasDone(){ return LS.getItem(ALTAS_KEY)==='1'; }
+function altasApply(){
+  let changed=false;
+  ALTAS_JUGADORES.forEach(np=>{
+    if(!(S.jugadores||[]).some(p=>p.id===np.id)){ S.jugadores.push({...np}); changed=true; }
+  });
+  return changed;
 }
 
 /* ================= ARRANQUE ================= */
