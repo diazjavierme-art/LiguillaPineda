@@ -162,7 +162,7 @@ input,select{font-family:inherit;font-size:15px}
 .login-card .eyebrow{font-family:'Oswald';font-size:11px;letter-spacing:2.5px;color:var(--pine);text-transform:uppercase;text-align:center}
 .login-card h1{font-size:24px;text-transform:uppercase;text-align:center;margin:4px 0 18px;color:var(--pine-dark)}
 .login-list{display:flex;flex-direction:column;gap:8px;max-height:44vh;overflow-y:auto;margin-bottom:12px}
-.login-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);
+.login-item{display:flex;width:100%;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);
   border-radius:12px;font-weight:600;background:var(--surface2)}
 .login-item:hover{border-color:var(--pine);background:var(--pine-tint)}
 .login-item .h{font-size:12px;color:var(--muted);font-weight:500}
@@ -175,10 +175,11 @@ input,select{font-family:inherit;font-size:15px}
   background:var(--pine-dark);color:#fff;padding:11px 18px;border-radius:12px;
   font-size:13.5px;z-index:60;transition:.25s;pointer-events:none;box-shadow:0 8px 30px rgba(0,0,0,.3)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.spon-strip{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
-  padding:22px 14px;margin-top:14px;border-top:1px solid var(--border)}
-.spon{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
-  min-width:116px;height:60px;padding:10px 18px;background:#fff;border:1px solid var(--border);
+.spon-strip{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;padding:18px 4px;margin-top:14px;border-top:1px solid var(--border)}
+.spon-strip::-webkit-scrollbar{display:none}
+.spon{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;text-decoration:none;
+  min-width:96px;height:52px;padding:8px 14px;background:#fff;border:1px solid var(--border);
   border-radius:10px;transition:.15s;box-shadow:0 1px 2px rgba(20,40,30,.04)}
 .spon:hover{border-color:var(--pine);box-shadow:0 3px 10px rgba(14,60,45,.09)}
 .spon img{max-width:100%;width:auto;display:block;object-fit:contain}
@@ -187,12 +188,12 @@ input,select{font-family:inherit;font-size:15px}
 .spon.ph span{font-family:'Oswald';font-size:11px;letter-spacing:2.2px;text-transform:uppercase;
   color:var(--muted);text-align:center;line-height:1.25}
 .spon.ph{border-style:dashed;background:var(--surface2)}
-.spon.sm{min-width:78px;height:40px;padding:6px 12px;border-radius:8px}
+.spon.sm{min-width:64px;height:36px;padding:5px 10px;border-radius:8px}
 .spon.sm.ph span{font-size:9px;letter-spacing:1.4px}
 .spon-bar{position:fixed;left:0;right:0;z-index:29;max-width:900px;margin:0 auto;
-  bottom:calc(58px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center;gap:10px;
+  bottom:calc(58px + env(safe-area-inset-bottom));display:flex;align-items:center;
   padding:8px 12px;background:#fff;border-top:1px solid var(--border)}
-.spon-bar .spon-strip{padding:0;margin:0;border:none;gap:10px}
+.spon-bar .spon-strip{padding:0;margin:0;border:none;gap:10px;justify-content:flex-start}
 .spon-hoyo{margin-top:3px;display:flex;align-items:center;justify-content:center;
   height:16px;border-radius:4px;background:#fff;border:1px solid var(--border);overflow:hidden;padding:0 3px}
 .spon-hoyo.has-logo{background:#fff}
@@ -447,23 +448,16 @@ function seed(){
         cr9i:null,slope9i:null,cr9v:null,slope9v:null}],hoyos:holes}],
     jugadores:[
       {id:'javier',nombre:'Javier Díaz',hcpExacto:11.4,licencia:'991357',pin:'',lowHI:12.0,
-        whsDiffs:[29.9,17.6,23.1,18.1,22.1,16.0,17.8,16.9,10.5,14.8,16.8,7.6,9.5,17.8,16.6,17.8,16.6,8.8,12.3,11.7].map(d=>({d}))},
-      {id:'caye',nombre:'Caye',hcpExacto:13,licencia:'',pin:''},
-      {id:'tito',nombre:'Tito',hcpExacto:10,licencia:'',pin:''},
-      {id:'carlitos',nombre:'Carlitos',hcpExacto:14,licencia:'',pin:''}
+        whsDiffs:[29.9,17.6,23.1,18.1,22.1,16.0,17.8,16.9,10.5,14.8,16.8,7.6,9.5,17.8,16.6,17.8,16.6,8.8,12.3,11.7].map(d=>({d}))}
     ],
     jornadas:[],
     updatedAt:Date.now()
   };
 }
 let S=load();
-// Si la liga aún no tiene jugadores (aunque venga de una versión anterior), carga los de ejemplo
+// Si la liga aún no tiene jugadores (aunque venga de una versión anterior), no se rellena con nadie de prueba
 if(!S.jugadores||!S.jugadores.length){
-  S.jugadores=[
-    {id:'caye',nombre:'Caye',hcpExacto:13,licencia:'',pin:''},
-    {id:'tito',nombre:'Tito',hcpExacto:10,licencia:'',pin:''},
-    {id:'carlitos',nombre:'Carlitos',hcpExacto:14,licencia:'',pin:''}
-  ];
+  S.jugadores=[];
   try{LS.setItem(KEY,JSON.stringify(S));}catch(e){}
 }
 function load(){
@@ -497,14 +491,37 @@ function showLogin(){
   document.getElementById('loginTitle').textContent=S.cfg.nombre||'Liguilla';
   loginPick();
 }
+function normLic(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+/g,''); }
 function loginPick(){
-  const items=[...S.jugadores].sort((a,b)=>a.nombre.localeCompare(b.nombre))
-    .map(p=>`<button class="login-item" onclick="loginPin('${p.id}')"><span>${esc(p.nombre)}</span><span class="h">${p.hcpExacto!=null?'Hcp '+fmt(p.hcpExacto):'sin hcp'}</span></button>`).join('');
-  document.getElementById('loginStep').innerHTML=`
-    <div class="login-list">${items||'<div class="hint" style="text-align:center">Aún no hay jugadores dados de alta</div>'}</div>
-    <button class="login-item" style="background:var(--pine-tint)" onclick="loginPin('admin')"><span>Administrador</span><span class="h">gestión</span></button>
-    <div class="login-note">Toca tu nombre para entrar · la primera vez crearás tu PIN</div>
+  document.getElementById('loginStep').innerHTML = `
+    <div class="field"><label>Tu número de licencia (RFEG)</label>
+      <input id="loginLic" type="text" inputmode="numeric" autocomplete="off" placeholder="Ej. 991357"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPinField').focus();}"></div>
+    <div class="field" style="margin-top:2px"><label>PIN</label>
+      <input id="loginPinField" type="password" inputmode="numeric" maxlength="12" placeholder="····"
+        onkeydown="if(event.key==='Enter')loginByLic()"></div>
+    <div class="modal-foot"><button class="btn btn-pine" style="width:100%" onclick="loginByLic()">Entrar</button></div>
+    <div class="login-note">El administrador da de alta tu número de licencia. La primera vez, el PIN que pongas se guarda como tuyo.</div>
+    <div class="login-note"><a style="color:var(--pine);cursor:pointer;font-weight:600" onclick="loginPin('admin')">Acceso administrador</a></div>
     ${sponStrip('login')}`;
+  setTimeout(()=>document.getElementById('loginLic').focus(),60);
+}
+function loginByLic(){
+  const raw=(document.getElementById('loginLic').value||'').trim();
+  const pin=(document.getElementById('loginPinField').value||'').trim();
+  if(!raw)return toast('Escribe tu número de licencia');
+  const norm=normLic(raw);
+  const p=S.jugadores.find(x=>x.licencia&&normLic(x.licencia)===norm);
+  if(!p)return toast('No encontramos esa licencia');
+  if(!p.pin){
+    if(!pin)return toast('Primera vez: escribe el PIN que quieras usar');
+    if(pin.length<3)return toast('PIN de al menos 3 dígitos');
+    p.pin=pin; save(); if(fb.ready)fbPushState();
+    sess={type:'player',id:p.id}; saveSess(); enterApp(); toast('PIN creado');
+    return;
+  }
+  if(pin!==p.pin)return toast('Licencia o PIN incorrecto');
+  sess={type:'player',id:p.id}; saveSess(); enterApp();
 }
 function loginPin(id){
   if(id==='admin'){
@@ -1253,7 +1270,7 @@ function openPlayer(id){
       <div class="field"><label>Hándicap actual</label><input id="pHcp" type="number" step="0.1" value="${p.hcpExacto??''}" placeholder="11.4"></div>
       <div class="field"><label>PIN</label><input id="pPin" value="${esc(p.pin||'')}" placeholder="vacío = lo crea el jugador"></div>
     </div>
-    <div class="field"><label>Licencia RFEG</label><input id="pLic" value="${esc(p.licencia||'')}" placeholder="opcional"></div>
+    <div class="field"><label>Licencia RFEG</label><input id="pLic" value="${esc(p.licencia||'')}" placeholder="obligatoria para poder entrar"></div>
     <div style="border-top:1px solid var(--border);margin:18px 0 14px;padding-top:14px">
       <label style="display:block;font-size:12px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;font-weight:500;margin-bottom:6px">Histórico WHS · siembra de la RFEG</label>
       <div class="field"><label>Los 20 diferenciales (del más antiguo al más reciente)</label>
@@ -1860,12 +1877,29 @@ function patchApply(){
   });
   return ch;
 }
-function maintPending(){ return !maintDone()||!patchDone(); }
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
   if(!patchDone()){ if(patchApply())changed=true; LS.setItem(PATCH_KEY,'1'); }
+  if(!bajasDone()){ const r2=bajasApply(); if(r2.changed){changed=true;removed=removed.concat(r2.removed);} LS.setItem(BAJAS_KEY,'1'); }
   return {changed,removed};
+}
+
+/* Baja de jugadores de prueba (no toca PIN de nadie más) */
+const BAJAS_KEY='lp_bajas_2026_07_a';
+const BAJAS_IDS=['caye','tito','carlitos'];
+function bajasDone(){ return LS.getItem(BAJAS_KEY)==='1'; }
+function bajasApply(){
+  const fuera=new Set((S.jugadores||[]).filter(p=>BAJAS_IDS.includes(p.id)).map(p=>p.id));
+  if(!fuera.size)return {changed:false,removed:[]};
+  S.jugadores=(S.jugadores||[]).filter(p=>!fuera.has(p.id));
+  (S.jornadas||[]).forEach(j=>{
+    j.resultados=(j.resultados||[]).filter(r=>!fuera.has(r.jugadorId));
+    if(Array.isArray(j.participantes))j.participantes=j.participantes.filter(id=>!fuera.has(id));
+  });
+  if(sess&&sess.type==='player'&&fuera.has(sess.id)){sess=null;LS.removeItem(SESSKEY);}
+  return {changed:true,removed:[...fuera]};
 }
 
 /* ================= ARRANQUE ================= */
