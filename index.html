@@ -1035,9 +1035,9 @@ function seedPatros(){
     {id:'vips',nombre:'VIPS',bg:'#FFFFFF',fg:'#C8102E',logo:VIPS_LOGO,
      url:'https://www.vips.es',ubic:['login','barra','clasif'],hoyos:[2, 8, 14],alto:26,altoSm:16},
     {id:'gh',nombre:'Gema Herrerías',bg:'#FFFFFF',fg:'#111111',logo:GH_LOGO,
-     url:'',ubic:['login','barra','tarjeta','clasif'],hoyos:[3, 9, 15],alto:40,altoSm:24},
+     url:'https://gemaherrerias.com',ubic:['login','barra','tarjeta','clasif'],hoyos:[3, 9, 15],alto:40,altoSm:24},
     {id:'imo',nombre:'IMO Farma',bg:'#FFFFFF',fg:'#111111',logo:'',logoSvg:IMO_SVG,
-     url:'',ubic:['login','barra','tarjeta','clasif','cierre'],hoyos:[4, 10, 16],alto:38,altoSm:22},
+     url:'https://www.imofarma.es',ubic:['login','barra','tarjeta','clasif','cierre'],hoyos:[4, 10, 16],alto:38,altoSm:22},
     {id:'titleist',nombre:'Titleist',bg:'#FFFFFF',fg:'#111111',logo:TITLEIST_LOGO,
      url:'https://www.titleist.com',ubic:['login','barra','clasif'],hoyos:[5,11,17],alto:26,altoSm:16},
     {id:'pib',nombre:'PIB Group',bg:'#FFFFFF',fg:'#444444',logo:PIB_LOGO,
@@ -1730,12 +1730,11 @@ function applyRemote(v){
   }
   S=merged; persistLocal();
   // limpieza puntual sobre el estado remoto (una sola vez; después se sube ya limpio)
-  if(fb.ready&&!maintDone()){
-    const r=maintApply();
-    LS.setItem(MAINT_KEY,'1');
+  if(fb.ready&&maintPending()){
+    const r=maintAll();
     if(r.changed){
       persistLocal();
-      (S.jornadas||[]).forEach(j=>r.removed.forEach(pid=>fbRemove('liga/cards/'+j.id+'/'+pid)));
+      (S.jornadas||[]).forEach(j=>(r.removed||[]).forEach(pid=>fbRemove('liga/cards/'+j.id+'/'+pid)));
       fbPushAll();
     }
   }
@@ -1832,9 +1831,28 @@ function maintApply(){
   return {changed,removed:[...fuera]};
 }
 function maintBoot(){
-  if(maintDone()||fbEnabled())return;   // con Firebase se aplica sobre el estado remoto
-  if(maintApply().changed)persistLocal();
-  LS.setItem(MAINT_KEY,'1');
+  if(fbEnabled())return;   // con Firebase se aplica sobre el estado remoto
+  if(maintAll().changed)persistLocal();
+}
+
+/* Parche de webs de patrocinadores (clave propia: no vuelve a borrar PIN) */
+const PATCH_KEY='lp_patch_urls_a';
+const PATRO_URLS={gh:'https://gemaherrerias.com',imo:'https://www.imofarma.es'};
+function patchDone(){ return LS.getItem(PATCH_KEY)==='1'; }
+function patchApply(){
+  let ch=false;
+  (((S.cfg||{}).patrocinadores)||[]).forEach(p=>{
+    const u=PATRO_URLS[p.id];
+    if(u&&p.url!==u){p.url=u;ch=true;}
+  });
+  return ch;
+}
+function maintPending(){ return !maintDone()||!patchDone(); }
+function maintAll(){
+  let changed=false,removed=[];
+  if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
+  if(!patchDone()){ if(patchApply())changed=true; LS.setItem(PATCH_KEY,'1'); }
+  return {changed,removed};
 }
 
 /* ================= ARRANQUE ================= */
