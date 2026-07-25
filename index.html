@@ -1737,6 +1737,13 @@ function mergeRemote(v){
   const courses=(Array.isArray(st.courses)&&st.courses.length)?st.courses:base.courses;
   if(courses===base.courses)restored=true;
   const s={cfg,jugadores:st.jugadores||[],courses,jornadas:[],updatedAt:st.updatedAt||0,_restored:restored};
+  // si el jugador de la siembra (p.ej. Javier) llegó de Firebase sin licencia, se la rellenamos:
+  // sin esto no podría entrar aunque el admin la tenga bien puesta en la ficha visible
+  (base.jugadores||[]).forEach(bp=>{
+    const rp=s.jugadores.find(x=>x.id===bp.id);
+    if(!rp){ s.jugadores.push({...bp}); s._restored=true; return; }
+    if(!rp.licencia&&bp.licencia){ rp.licencia=bp.licencia; s._restored=true; }
+  });
   const jo=v.jornadas||{};
   Object.keys(jo).forEach(id=>{const j=jo[id];s.jornadas.push({id,fecha:j.fecha||'',courseId:j.courseId||'',
     teeNombre:j.teeNombre||'',creadorId:j.creadorId||null,cerrada:!!j.cerrada,participantes:normArr(j.participantes),resultados:[]});});
