@@ -190,6 +190,10 @@ input,select{font-family:inherit;font-size:15px}
 .spon.ph{border-style:dashed;background:var(--surface2)}
 .spon.sm{min-width:64px;height:36px;padding:5px 10px;border-radius:8px}
 .spon.sm.ph span{font-size:9px;letter-spacing:1.4px}
+.spon-strip.spon-auto{overflow:hidden;flex-wrap:nowrap}
+.spon-track{display:flex;gap:12px;width:max-content;animation-name:sponScroll;animation-timing-function:linear;animation-iteration-count:infinite}
+@keyframes sponScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.spon-track{animation:none}}
 .spon-bar{position:fixed;left:0;right:0;z-index:29;max-width:900px;margin:0 auto;
   bottom:calc(58px + env(safe-area-inset-bottom));display:flex;align-items:center;
   padding:8px 12px;background:#fff;border-top:1px solid var(--border)}
@@ -1080,6 +1084,12 @@ function sponChip(p,size,noLink){
 }
 function sponStrip(u){
   const l=patrosDe(u); if(!l.length)return '';
+  if(u==='login'){
+    // en el login: desplazamiento automático hacia la izquierda, en bucle, para que se vean todos sin tocar
+    const chips=l.map(p=>sponChip(p)).join('');
+    const dur=Math.max(14,l.length*4); // más patrocinadores → recorrido algo más largo
+    return `<div class="spon-strip spon-auto"><div class="spon-track" style="animation-duration:${dur}s">${chips}${chips}</div></div>`;
+  }
   const noLink=(u==='tarjeta');   // en la tarjeta: logo sí, hipervínculo no
   return `<div class="spon-strip">${l.map(p=>sponChip(p,null,noLink)).join('')}</div>`;
 }
