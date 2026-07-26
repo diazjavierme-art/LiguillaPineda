@@ -1908,7 +1908,48 @@ function rebrandGhApply(){
   if(p.url){p.url='';ch=true;}
   return ch;
 }
-function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone(); }
+
+/* Demo puntual de Evolución: dos jugadores DEMO, uno sube y otro baja, para comprobar la gráfica.
+   Fácil de quitar luego: basta con borrar "DEMO · Sube" y "DEMO · Baja" desde Jugadores. */
+const DEMO_EVO_KEY='lp_demo_evo_2026_07_a';
+function demoEvoDone(){ return LS.getItem(DEMO_EVO_KEY)==='1'; }
+function demoEvoApply(){
+  if(!S.courses||!S.courses.length)return false;   // sin campo configurado, no forzamos nada
+  const course=S.courses[0], tee=(course.tees&&course.tees[0])||{nombre:''};
+  const dias=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);};
+  const jid1='demo_j1', jid2='demo_j2';
+  let ch=false;
+  if(!S.jugadores.some(p=>p.id==='demo_sube')){
+    S.jugadores.push({id:'demo_sube',nombre:'DEMO · Sube',hcpExacto:18.0,licencia:'',pin:'',
+      whsDiffs:[{d:20.0},{d:20.0},{d:20.0}]});
+    ch=true;
+  }
+  if(!S.jugadores.some(p=>p.id==='demo_baja')){
+    S.jugadores.push({id:'demo_baja',nombre:'DEMO · Baja',hcpExacto:18.0,licencia:'',pin:'',
+      whsDiffs:[{d:20.0},{d:20.0},{d:20.0}]});
+    ch=true;
+  }
+  const par=PINEDA.par;
+  const tarjeta=(extra)=>par.map(p=>p+extra);
+  [[jid1,dias(14),22.0,14.0],[jid2,dias(7),23.0,11.0]].forEach(([jid,fecha,dSube,dBaja])=>{
+    if(!S.jornadas.some(j=>j.id===jid)){
+      S.jornadas.push({id:jid,fecha,courseId:course.id,teeNombre:tee.nombre,creadorId:null,cerrada:true,
+        participantes:['demo_sube','demo_baja'],
+        resultados:[
+          {jugadorId:'demo_sube',hcpSnap:18.0,hoyos:tarjeta(2),retirada:null},
+          {jugadorId:'demo_baja',hcpSnap:18.0,hoyos:tarjeta(0),retirada:null}
+        ]});
+      ch=true;
+    }
+    const sube=S.jugadores.find(p=>p.id==='demo_sube'), baja=S.jugadores.find(p=>p.id==='demo_baja');
+    if(sube&&!sube.whsDiffs.some(d=>d.jid===jid)){sube.whsDiffs.push({d:dSube,jid});ch=true;}
+    if(baja&&!baja.whsDiffs.some(d=>d.jid===jid)){baja.whsDiffs.push({d:dBaja,jid});ch=true;}
+  });
+  const s2=S.jugadores.find(p=>p.id==='demo_sube'); if(s2)s2.hcpExacto=whsIndex(s2.whsDiffs.map(x=>x.d),null);
+  const b2=S.jugadores.find(p=>p.id==='demo_baja'); if(b2)b2.hcpExacto=whsIndex(b2.whsDiffs.map(x=>x.d),null);
+  return ch;
+}
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone()||!demoEvoDone(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
@@ -1917,6 +1958,7 @@ function maintAll(){
   if(!altasDone()){ if(altasApply())changed=true; LS.setItem(ALTAS_KEY,'1'); }
   if(!bajas2Done()){ const r3=bajas2Apply(); if(r3.changed){changed=true;removed=removed.concat(r3.removed);} LS.setItem(BAJAS2_KEY,'1'); }
   if(!rebrandGhDone()){ if(rebrandGhApply())changed=true; LS.setItem(REBRAND_GH_KEY,'1'); }
+  if(!demoEvoDone()){ if(demoEvoApply())changed=true; LS.setItem(DEMO_EVO_KEY,'1'); }
   return {changed,removed};
 }
 
