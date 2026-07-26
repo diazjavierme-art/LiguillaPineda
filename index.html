@@ -1949,7 +1949,21 @@ function demoEvoApply(){
   const b2=S.jugadores.find(p=>p.id==='demo_baja'); if(b2)b2.hcpExacto=whsIndex(b2.whsDiffs.map(x=>x.d),null);
   return ch;
 }
-function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone()||!demoEvoDone(); }
+/* Quita la demo de Evolución (jugadores y jornadas DEMO), ya comprobada */
+const DEMO_EVO_OFF_KEY='lp_demo_evo_off_2026_07_a';
+function demoEvoOffDone(){ return LS.getItem(DEMO_EVO_OFF_KEY)==='1'; }
+function demoEvoOffApply(){
+  const ids=['demo_sube','demo_baja'], jids=['demo_j1','demo_j2'];
+  let ch=false;
+  const n1=S.jugadores.length; S.jugadores=S.jugadores.filter(p=>!ids.includes(p.id));
+  if(S.jugadores.length!==n1)ch=true;
+  const n2=S.jornadas.length; S.jornadas=S.jornadas.filter(j=>!jids.includes(j.id));
+  if(S.jornadas.length!==n2)ch=true;
+  if(sess&&sess.type==='player'&&ids.includes(sess.id)){sess=null;LS.removeItem(SESSKEY);}
+  return ch;
+}
+
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone()||!demoEvoDone()||!demoEvoOffDone(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
@@ -1959,6 +1973,7 @@ function maintAll(){
   if(!bajas2Done()){ const r3=bajas2Apply(); if(r3.changed){changed=true;removed=removed.concat(r3.removed);} LS.setItem(BAJAS2_KEY,'1'); }
   if(!rebrandGhDone()){ if(rebrandGhApply())changed=true; LS.setItem(REBRAND_GH_KEY,'1'); }
   if(!demoEvoDone()){ if(demoEvoApply())changed=true; LS.setItem(DEMO_EVO_KEY,'1'); }
+  if(!demoEvoOffDone()){ if(demoEvoOffApply())changed=true; LS.setItem(DEMO_EVO_OFF_KEY,'1'); }
   return {changed,removed};
 }
 
