@@ -446,13 +446,12 @@ function seed(){
   return {
     cfg:{nombre:'Liguilla Pineda',temporada:'2026',hcpMethod:'whs',allowance:100,
       adminPass:'',minTarjetas:8,minPorNine:2,cuentanMejores:8,maxRondas:16,minJugadores:3,galaCorte:6,
-      whsActivo:true,whsOffset:2.9,pcc:0,syncUrl:'',patrocinadores:seedPatros()},
+      syncUrl:'',patrocinadores:seedPatros()},
     courses:[{id:uid(),nombre:'Real Club Pineda',verificado:true,
-      tees:[{nombre:'Blancas',slope:138,cr:72.0,metros:5986,
-        cr9i:null,slope9i:null,cr9v:null,slope9v:null}],hoyos:holes}],
+      tees:[{nombre:'Blancas',slope:138,cr:72.0,metros:5986}],hoyos:holes}],
     jugadores:[
-      {id:'javier',nombre:'Javier Díaz',hcpExacto:11.4,licencia:'991357',pin:'',lowHI:12.0,
-        whsDiffs:[29.9,17.6,23.1,18.1,22.1,16.0,17.8,16.9,10.5,14.8,16.8,7.6,9.5,17.8,16.6,17.8,16.6,8.8,12.3,11.7].map(d=>({d}))}
+      {id:'javier',nombre:'Javier Díaz',hcpExacto:11.4,licencia:'991357',pin:'',
+        hcpBaseline:11.4,hcpHist:[{hcp:11.4,jid:null,fecha:null,rec:null}]}
     ],
     jornadas:[],
     updatedAt:Date.now()
@@ -595,7 +594,9 @@ function saveOwnHcp(){
   const v=parseFloat(val('ownHcp'));
   if(isNaN(v))return toast('Pon tu hándicap');
   const p=S.jugadores.find(x=>x.id===myId());
-  p.hcpExacto=Math.round(v*10)/10;
+  const hcp=Math.round(v*10)/10;
+  p.hcpExacto=hcp; p.hcpBaseline=hcp; p.hcpHist=[{hcp,jid:null,fecha:null,rec:null}];
+  recomputeHandicaps();
   save();closeModal();render();toast('Hándicap fijado: '+fmt(p.hcpExacto));
 }
 function enterApp(){
@@ -607,7 +608,7 @@ function enterApp(){
   if(!isAdmin()){const cur=document.querySelector('.view.active');if(cur&&['v-jugadores','v-campos','v-ajustes'].includes(cur.id))nav('clasif');}
   render();
   const me=S.jugadores.find(x=>x.id===myId());
-  if(me&&!whsAuto(me)&&(me.hcpExacto==null||isNaN(me.hcpExacto)))askOwnHcp();
+  if(me&&(me.hcpExacto==null||isNaN(me.hcpExacto)))askOwnHcp();
 }
 
 /* ================= HÁNDICAP + STABLEFORD ================= */
@@ -637,101 +638,49 @@ function recIdx(rec){
 }
 function recLabel(rec){return rec==='vuelta'?'Vuelta (10–18)':rec==='18'?'18 hoyos':'Ida (1–9)';}
 function recShort(rec){return rec==='vuelta'?'Vuelta':rec==='18'?'18h':'Ida';}
-/* ================= WHS · índice interno de la liguilla =================
-   Sembrado con los 20 diferenciales de la RFEG al empezar. A partir de ahí
-   SOLO lo mueven las vueltas de la liguilla (el índice oficial no nos afecta). */
-const WHS_TABLA=[
-  {min:3,max:3,n:1,adj:-2.0},{min:4,max:4,n:1,adj:-1.0},{min:5,max:5,n:1,adj:0},
-  {min:6,max:6,n:2,adj:-1.0},{min:7,max:8,n:2,adj:0},{min:9,max:11,n:3,adj:0},
-  {min:12,max:14,n:4,adj:0},{min:15,max:16,n:5,adj:0},{min:17,max:18,n:6,adj:0},
-  {min:19,max:19,n:7,adj:0},{min:20,max:9999,n:8,adj:0}
-];
-function whsTabla(n){return WHS_TABLA.find(r=>n>=r.min&&n<=r.max)||null;}
-function scoreDifferential(ags,cr,slope,pcc){
-  if(!slope)return null;
-  return (113/slope)*(ags-cr-(+pcc||0));
-}
-/* Diferencial esperado de 9 hoyos según el índice del día.
-   Aproximación de la tabla (propietaria) de la USGA: dif. media 18h ≈ HI + offset. */
-function expected9(hi){
-  const off=(S.cfg.whsOffset==null?2.9:+S.cfg.whsOffset);
-  return ((+hi||0)+off)/2;
-}
-/* Golpes ajustados: máximo por hoyo = par + 2 + golpes recibidos (net double bogey) */
-function adjustedGross(res,course,idxs,sMap){
-  let ags=0;
-  idxs.forEach(i=>{
-    const g=+(res.hoyos?.[i])||0; if(g<=0)return;
-    const max=course.hoyos[i].par+2+(sMap[i]||0);
-    ags+=Math.min(g,max);
-  });
-  return ags;
-}
-/* Índice = media de los 8 mejores de los últimos 20, con topes */
-function whsIndex(diffs,lowHI){
-  const last=diffs.slice(-20);
-  const r=whsTabla(last.length); if(!r)return null;
-  const best=[...last].sort((a,b)=>a-b).slice(0,r.n);
-  let hi=best.reduce((a,b)=>a+b,0)/best.length + r.adj;
-  hi=Math.round(hi*10)/10;
-  if(lowHI!=null){                       // soft cap (+3) y hard cap (+5)
-    const inc=hi-lowHI;
-    if(inc>5.0) hi=lowHI+5.0;
-    else if(inc>3.0) hi=lowHI+3.0+(inc-3.0)*0.5;
-    hi=Math.round(hi*10)/10;
-  }
-  return hi;
-}
-function whsDiffsOf(pl){return (pl.whsDiffs||[]).map(x=>(typeof x==='number')?x:x.d);}
-/* El hándicap lo lleva el sistema si está activo y el jugador tiene histórico sembrado */
-function whsAuto(pl){return S.cfg.whsActivo!==false && whsDiffsOf(pl).length>=3;}
-function recalcIndex(pl){
-  const hi=whsIndex(whsDiffsOf(pl),pl.lowHI);
-  if(hi==null)return;
-  pl.hcpExacto=hi;
-  if(pl.lowHI==null||hi<pl.lowHI)pl.lowHI=hi;
-}
-/* CR y Slope del segmento jugado */
-function segRating(tee,rec){
-  if(rec==='18')return {cr:+tee.cr,slope:+tee.slope,aprox:false};
-  const cr = rec==='ida' ? tee.cr9i : tee.cr9v;
-  const sl = rec==='ida' ? tee.slope9i : tee.slope9v;
-  if(cr!=null&&sl!=null&&+sl>0) return {cr:+cr,slope:+sl,aprox:false};
-  return {cr:(+tee.cr)/2, slope:+tee.slope, aprox:true};   // aproximación si falta el dato oficial
-}
-/* Al CERRAR una partida: cada tarjeta completa genera un diferencial */
-function whsRegistrar(j){
-  if(S.cfg.whsActivo===false)return;
-  const course=S.courses.find(c=>c.id===j.courseId); if(!course)return;
-  const tee=course.tees.find(t=>t.nombre===j.teeNombre)||course.tees[0];
+/* ================= HÁNDICAP · sistema simplificado de la liguilla =================
+   El admin pone un hándicap de partida (hcpBaseline) a cada jugador. Cada vez que
+   cierra una jornada con tarjeta completa:
+     resultado = puntos de esa ronda (golpes − objetivo, el mismo "pts" de la clasificación)
+                 ×2 si fue ida o vuelta (9 hoyos)
+     valor_nuevo = tu último hándicap oficial + resultado
+     hándicap oficial = media de TODOS tus hándicaps oficiales anteriores
+                        (empezando por el de partida) + ese valor_nuevo
+   Así, jugar exactamente a tu nivel (pts=0) deja el hándicap igual; jugar mejor lo baja
+   y jugar peor lo sube — igual que un hándicap de verdad.
+   El hándicap de juego para repartir golpes por hoyo sigue igual (slope/CR del campo). */
+function resultadoJornada(pl,j,course,tee,hcpFallback){
   const rec=j.recorrido||'ida';
-  const {cr,slope}=segRating(tee,rec);
-  jParticipants(j).forEach(id=>{
-    const pl=S.jugadores.find(p=>p.id===id); if(!pl)return;
-    const res=j.resultados.find(r=>r.jugadorId===id); if(!res)return;
-    const m=medalCalc(res,course,tee,pl.hcpExacto,rec);
-    if(!m.completo)return;
-    const ags=adjustedGross(res,course,m.idxs,m.sMap);
-    const hiDia=(res.hcpSnap!=null)?res.hcpSnap:pl.hcpExacto;
-    let d=scoreDifferential(ags,cr,slope,S.cfg.pcc);
-    if(d==null)return;
-    if(rec!=='18') d=d+expected9(hiDia);      // escalado 9 → 18 (WHS 2024)
-    d=Math.round(d*10)/10;
-    pl.whsDiffs=pl.whsDiffs||[];
-    pl.whsDiffs.push({d,jid:j.id,fecha:j.fecha,rec});
-    recalcIndex(pl);
-  });
+  const res=j.resultados.find(r=>r.jugadorId===pl.id); if(!res)return null;
+  const m=medalCalc(res,course,tee,hcpFallback,rec);
+  if(!m.completo)return null;
+  let resultado=m.pts;
+  if(rec!=='18')resultado*=2;
+  return Math.round(resultado*10)/10;
 }
-/* Al REABRIR: se retira el diferencial de esa partida */
-function whsQuitar(j){
+/* Recalcula el hándicap de TODOS los jugadores desde cero (hcpBaseline + jornadas cerradas
+   en orden de fecha). Es la única función que toca hcpExacto/hcpHist: se llama al cerrar o
+   reabrir una partida, así nunca puede quedar desincronizado, se reabra lo que se reabra. */
+function recomputeHandicaps(){
   S.jugadores.forEach(pl=>{
-    if(!pl.whsDiffs||!pl.whsDiffs.length)return;
-    const antes=pl.whsDiffs.length;
-    pl.whsDiffs=pl.whsDiffs.filter(x=>!(x&&x.jid===j.id));
-    if(pl.whsDiffs.length!==antes)recalcIndex(pl);
+    const base=Math.round((pl.hcpBaseline!=null?pl.hcpBaseline:(pl.hcpExacto||0))*10)/10;
+    const hist=[{hcp:base,jid:null,fecha:null,rec:null}];
+    const jor=S.jornadas.filter(j=>j.cerrada&&jParticipants(j).includes(pl.id))
+      .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+    jor.forEach(j=>{
+      const course=S.courses.find(c=>c.id===j.courseId); if(!course)return;
+      const tee=course.tees.find(t=>t.nombre===j.teeNombre)||course.tees[0];
+      const last=hist[hist.length-1].hcp;
+      const resultado=resultadoJornada(pl,j,course,tee,last); if(resultado==null)return;
+      const naive=last+resultado;
+      const suma=hist.reduce((a,h)=>a+h.hcp,0)+naive;
+      const nuevo=Math.round((suma/(hist.length+1))*10)/10;
+      hist.push({hcp:nuevo,jid:j.id,fecha:j.fecha,rec:j.recorrido||'ida'});
+    });
+    pl.hcpHist=hist;
+    pl.hcpExacto=hist[hist.length-1].hcp;
   });
 }
-
 function medalCalc(res,course,tee,fallbackHi,rec){
   const hi=(res.hcpSnap!=null)?res.hcpSnap:(fallbackHi||0);
   const idxs=recIdx(rec), nH=idxs.length;
@@ -949,7 +898,7 @@ function renderPlayers(){
     return `<div class="li">
       <div class="info">
         <div class="t">${esc(p.nombre)}</div>
-        <div class="s">Hcp ${tiene?fmt(p.hcpExacto):'sin poner'}${p.licencia?` · Lic. ${esc(p.licencia)}`:''}${tiene&&course?` · juego ${ph}`:''} · ${whsDiffsOf(p).length}/20 dif.${p.pin?' · PIN '+esc(p.pin):''}</div>
+        <div class="s">Hcp ${tiene?fmt(p.hcpExacto):'sin poner'}${p.licencia?` · Lic. ${esc(p.licencia)}`:''}${tiene&&course?` · juego ${ph}`:''} · ${Math.max(0,(p.hcpHist||[]).length-1)} rondas${p.pin?' · PIN '+esc(p.pin):''}</div>
       </div>
       <div class="actions">
         <button class="icon-btn" onclick="openPlayerDetail('${p.id}')" title="Ficha y evolución">📈</button>
@@ -976,17 +925,14 @@ const COLORES=['#0e5c3f','#c9a227','#2e6f95','#b0563d','#7a5ba6','#2f8f7a','#a16
 let EVO_OCULTOS=new Set();
 function evolucionLiga(){
   const jor=S.jornadas.filter(j=>j.cerrada).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
-  const val=x=>(typeof x==='number')?x:x.d;
   const series=S.jugadores.map((pl,k)=>{
-    const all=pl.whsDiffs||[];
-    const primera=all.findIndex(x=>x&&x.jid);
-    const base=(primera<0)?all:all.slice(0,primera);
-    let hi=whsIndex(base.map(val),null);
+    const hist=pl.hcpHist&&pl.hcpHist.length?pl.hcpHist:[{hcp:pl.hcpExacto,jid:null,fecha:null}];
+    let hi=hist[0].hcp;
     const pts=[{x:-1,hi,salida:true}];
     jor.forEach((j,i)=>{
-      const pos=all.findIndex(x=>x&&x.jid===j.id);
+      const h=hist.find(x=>x.jid===j.id);
       let jugo=false;
-      if(pos>=0){const nh=whsIndex(all.slice(0,pos+1).map(val),null);if(nh!=null){hi=nh;jugo=true;}}
+      if(h){hi=h.hcp;jugo=true;}
       pts.push({x:i,hi,jugo,fecha:j.fecha});
     });
     return {pl,color:COLORES[k%COLORES.length],pts:pts.filter(p=>p.hi!=null),
@@ -1177,24 +1123,10 @@ function openModal(html){md.innerHTML=html;ov.classList.add('open');md.scrollTop
 function closeModal(){ov.classList.remove('open');}
 ov.addEventListener('click',e=>{if(e.target===ov)closeModal();});
 
-/* ---- Evolución del hándicap: se reconstruye desde el histórico de diferenciales ---- */
+/* ---- Evolución del hándicap: ya viene lista en el propio historial del jugador ---- */
 function whsEvolucion(pl){
-  const all=(pl.whsDiffs||[]);
-  const val=x=>(typeof x==='number')?x:x.d;
-  const pts=[];
-  const primera=all.findIndex(x=>x&&x.jid);
-  if(primera<0){
-    const hi=whsIndex(all.map(val),null);
-    return hi!=null?[{lbl:'Inicio',hi,fecha:null}]:[];
-  }
-  const hi0=whsIndex(all.slice(0,primera).map(val),null);
-  if(hi0!=null)pts.push({lbl:'Inicio',hi:hi0,fecha:null});
-  for(let k=primera;k<all.length;k++){
-    const e=all[k]; if(!(e&&e.jid))continue;
-    const hi=whsIndex(all.slice(0,k+1).map(val),null);
-    if(hi!=null)pts.push({lbl:'R'+pts.length,hi,fecha:e.fecha,d:val(e)});
-  }
-  return pts;
+  const hist=pl.hcpHist&&pl.hcpHist.length?pl.hcpHist:[{hcp:pl.hcpExacto,jid:null,fecha:null,rec:null}];
+  return hist.map((e,i)=>({lbl:i===0?'Inicio':'R'+i, hi:e.hcp, fecha:e.fecha, rec:e.rec}));
 }
 function chartHcp(pts){
   if(pts.length<2)return `<div class="hint" style="padding:18px 0;text-align:center">Aún no hay rondas suficientes para dibujar la evolución.</div>`;
@@ -1231,10 +1163,6 @@ function openPlayerDetail(id){
   const pl=S.jugadores.find(p=>p.id===id); if(!pl)return;
   const ev=whsEvolucion(pl);
   const fila=playerRows().find(r=>r.pl.id===id);
-  const diffsAll=whsDiffsOf(pl);
-  const diffs=diffsAll.slice(-20);           // ventana WHS activa (siempre 20 como máximo)
-  const archivadas=diffsAll.length-diffs.length;
-  let mejores=[...diffs].sort((a,b)=>a-b).slice(0,8);
   const rondas=[];
   S.jornadas.filter(j=>j.cerrada).sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''))
     .forEach(j=>{const c=jornadaPuntos(j)[id]; if(c)rondas.push({fecha:j.fecha,rec:j.recorrido||'ida',pts:c.pts});});
@@ -1259,41 +1187,32 @@ function openPlayerDetail(id){
           <span class="hint" style="margin-left:8px">${cuenta?'cuenta':'descartada'}</span></span>
         </div>`;}).join(''):'<div class="hint" style="padding:16px;text-align:center">Aún sin rondas jugadas</div>'}
     </div>
-    <div class="section-lbl">Histórico WHS</div>
-    <div class="card">
-      <div class="hint" style="margin:0 0 8px">Ventana WHS: últimos ${diffs.length} · en verde los 8 que dan el índice${archivadas?` · ${archivadas} archivada${archivadas>1?'s':''}`:''}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${diffs.map(d=>{const k=mejores.indexOf(d);const es=k>=0;if(es)mejores.splice(k,1);
-          return `<span class="chip ${es?'closed':''}" style="font-size:11px">${fmt(d)}</span>`;}).join('')}
-      </div>
+    <div class="section-lbl">Historial de hándicap</div>
+    <div class="card" style="padding:6px 0">
+      ${ev.map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--surface3)">
+          <span style="font-size:13.5px">${e.fecha?fdate(e.fecha)+' · '+recShort(e.rec||'ida'):'Hándicap de partida (inicio)'}</span>
+          <b class="num">${fmt(e.hi)}</b>
+        </div>`).join('')}
     </div>`);
 }
 /* --- Jugador (admin) --- */
 function openPlayer(id){
   if(!isAdmin())return;
   const p=id?S.jugadores.find(x=>x.id===id):{nombre:'',licencia:'',hcpExacto:'',pin:''};
-  const dl=whsDiffsOf(p);
+  const hist=p.hcpHist||[];
+  const jugadas=Math.max(0,hist.length-1);
   openModal(`
     <div class="modal-head"><h3>${id?'Editar':'Nuevo'} jugador</h3><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="field"><label>Nombre</label><input id="pNombre" value="${esc(p.nombre)}" placeholder="Nombre y apellidos"></div>
     <div class="row-2">
-      <div class="field"><label>Hándicap actual</label><input id="pHcp" type="number" step="0.1" value="${p.hcpExacto??''}" placeholder="11.4"></div>
+      <div class="field"><label>Hándicap de partida (30 de agosto)</label>
+        <input id="pHcp" type="number" step="0.1" value="${p.hcpBaseline??p.hcpExacto??''}" placeholder="11.4"></div>
       <div class="field"><label>PIN</label><input id="pPin" value="${esc(p.pin||'')}" placeholder="vacío = lo crea el jugador"></div>
     </div>
     <div class="field"><label>Licencia RFEG</label><input id="pLic" value="${esc(p.licencia||'')}" placeholder="obligatoria para poder entrar"></div>
-    <div style="border-top:1px solid var(--border);margin:18px 0 14px;padding-top:14px">
-      <label style="display:block;font-size:12px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;font-weight:500;margin-bottom:6px">Histórico WHS · siembra de la RFEG</label>
-      <div class="field"><label>Los 20 diferenciales (del más antiguo al más reciente)</label>
-        <textarea id="pDiffs" rows="4" placeholder="29.9, 17.6, 23.1, 18.1, 22.1, 16.0, …"
-          style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;outline:none;font-family:inherit;font-size:14px">${dl.join(', ')}</textarea>
-        <div class="hint">Cópialos de la hoja de cálculo del hándicap de la RFEG (columna DIFERENCIAL). Separados por comas o saltos de línea.</div>
-      </div>
-      <div class="field"><label>Hándicap más bajo (últimos 12 meses)</label>
-        <input id="pLow" type="number" step="0.1" value="${p.lowHI??''}" placeholder="12.0">
-        <div class="hint">Sale en la misma hoja de la RFEG. Se usa solo para los topes de subida.</div>
-      </div>
-      ${dl.length?`<div class="banner" style="margin:0"><span>✓</span><div><b>${dl.length} diferenciales cargados.</b> Índice calculado: <b>${fmt(whsIndex(dl,p.lowHI)??0)}</b></div></div>`:''}
-    </div>
+    ${jugadas?`<div class="banner" style="margin:0 0 14px"><span>ℹ</span><div>Ya lleva <b>${jugadas} ronda${jugadas>1?'s':''}</b> jugada${jugadas>1?'s':''} · hándicap actual calculado: <b>${fmt(p.hcpExacto??0)}</b>.
+      Si cambias el de partida, se recalcula todo el historial desde ahí.</div></div>`
+      :`<div class="hint" style="margin:-8px 0 14px">Este es el punto de partida. A partir de la primera ronda jugada, el hándicap se recalcula solo.</div>`}
     <div class="modal-foot">
       ${id?`<button class="btn btn-danger" onclick="delPlayer('${id}',true)">Eliminar</button>`:''}
       <button class="btn btn-pine" onclick="savePlayer('${id||''}')">Guardar</button>
@@ -1305,25 +1224,16 @@ function savePlayer(id){
   const hcp=hcpRaw===''?null:parseFloat(hcpRaw);
   if(!nombre)return toast('Falta el nombre');
   if(hcpRaw!==''&&isNaN(hcp))return toast('Hándicap no válido');
-  const rawD=(document.getElementById('pDiffs')?document.getElementById('pDiffs').value:'')||'';
-  const diffs=rawD.split(/[\s,;]+/).map(s=>parseFloat(s)).filter(v=>!isNaN(v));
-  const rawLow=(document.getElementById('pLow')?document.getElementById('pLow').value:'')||'';
-  const low=rawLow===''?null:parseFloat(rawLow);
   let pl;
-  if(id){pl=S.jugadores.find(x=>x.id===id);if(pl)Object.assign(pl,{nombre,hcpExacto:hcp,licencia:lic,pin});}
-  else {pl={id:uid(),nombre,hcpExacto:hcp,licencia:lic,pin};S.jugadores.push(pl);}
+  if(id){pl=S.jugadores.find(x=>x.id===id);if(pl)Object.assign(pl,{nombre,licencia:lic,pin});}
+  else {pl={id:uid(),nombre,licencia:lic,pin};S.jugadores.push(pl);}
   if(pl){
-    pl.lowHI=(low!=null&&!isNaN(low))?low:null;
-    const prev=pl.whsDiffs||[];
-    // conserva la trazabilidad de los que vinieron de partidas de la liga
-    if(diffs.length){
-      pl.whsDiffs=diffs.map((d,i)=>{
-        const old=prev[i];
-        return (old&&typeof old==='object'&&old.jid&&Math.round(old.d*10)===Math.round(d*10))?old:{d};
-      });
-      recalcIndex(pl);
-    } else pl.whsDiffs=[];
+    const base=(hcp!=null&&!isNaN(hcp))?Math.round(hcp*10)/10:null;
+    pl.hcpBaseline=base;
+    if(base==null){ pl.hcpExacto=null; pl.hcpHist=[]; }
+    else { pl.hcpExacto=base; if(!pl.hcpHist||!pl.hcpHist.length)pl.hcpHist=[{hcp:base,jid:null,fecha:null,rec:null}]; }
   }
+  recomputeHandicaps();
   save();closeModal();render();toast('Guardado');
 }
 function delPlayer(id,fromModal){
@@ -1388,7 +1298,10 @@ function delJornada(id){
   const j=S.jornadas.find(x=>x.id===id);
   if(!canManageJornada(j))return;
   if(!confirm('¿Eliminar la partida y sus tarjetas?'))return;
-  S.jornadas=S.jornadas.filter(x=>x.id!==id);save();fbRemove('liga/jornadas/'+id);fbRemove('liga/cards/'+id);closeModal();render();toast('Eliminada');
+  const eraCerrada=j.cerrada;
+  S.jornadas=S.jornadas.filter(x=>x.id!==id);
+  if(eraCerrada)recomputeHandicaps();
+  save();fbRemove('liga/jornadas/'+id);fbRemove('liga/cards/'+id);if(eraCerrada&&fb.ready)fbPushState();closeModal();render();toast('Eliminada');
 }
 
 /* --- Resultados --- */
@@ -1456,8 +1369,7 @@ function scorePlayerHTML(pl,res,j,course,tee){
   const m=medalCalc(res,course,tee,pl.hcpExacto,rec);
   const ph=m.phSeg;
   const editable=canEdit(j,pl.id)&&(pl.hcpExacto!=null||res.hcpSnap!=null);
-  const auto=whsAuto(pl);
-  const puedeHcp=!j.cerrada&&(isAdmin()||(myId()===pl.id&&!auto));
+  const puedeHcp=!j.cerrada&&(isAdmin()||myId()===pl.id);
   const snap=(res.hcpSnap!=null)?res.hcpSnap:pl.hcpExacto;
   const cell=(i)=>{
     const h=course.hoyos[i];const g=res.hoyos[i]??'';
@@ -1484,10 +1396,8 @@ function scorePlayerHTML(pl,res,j,course,tee){
     <div class="sp-body" id="body-${pl.id}">
       ${puedeHcp?`<div class="snap-field"><label>${myId()===pl.id?'Mi hcp para esta partida':'Hcp este día'}</label>
         <input type="number" step="0.1" value="${snap??''}" onchange="onSnap('${pl.id}',this.value)">
-        <span class="hint" style="margin:0">${isAdmin()&&auto?'corrección solo para esta partida':'ponlo si ha cambiado'}</span></div>`
-      :(auto?`<div class="snap-field"><label>Hándicap</label>
-        <b style="font-size:16px;color:var(--pine)">${snap!=null?fmt(snap):'—'}</b>
-        <span class="hint" style="margin:0">automático · se recalcula al cerrar la partida</span></div>`:'')}
+        <span class="hint" style="margin:0">ponlo si ha cambiado</span></div>`
+      :''}
       ${grid}
       ${retiradaBox(pl,res,m,editable)}
       <div class="sp-totals" id="tot-${pl.id}">${totalsLine(m)}</div>
@@ -1534,12 +1444,8 @@ function quitarRetirada(pid){
 function onSnap(pid,v){
   const j=S.jornadas.find(x=>x.id===window._sc.jid);
   const res=j.resultados.find(r=>r.jugadorId===pid);
-  const pl=S.jugadores.find(x=>x.id===pid);
   const nv=v===''?null:Math.round(parseFloat(v)*10)/10;
   res.hcpSnap=nv;
-  /* Solo se arrastra al hcp del jugador si NO lo lleva el WHS (jugadores sin histórico).
-     Con histórico sembrado, el índice lo calcula el sistema al cerrar cada partida. */
-  if(nv!=null&&myId()===pid&&pl&&!whsAuto(pl)) pl.hcpExacto=nv;
   save();fbPushCard(window._sc.jid,pid);rebuildScorePlayer(pid);
 }
 function rebuildScorePlayer(pid){
@@ -1591,7 +1497,7 @@ function cerrarJornada(jid){
   if(incompletas.length&&!confirm(`Hay tarjetas sin terminar los ${nH} hoyos y sin marcar retirada: NO puntuarán. ¿Cerrar igualmente?`))return;
   if(validas<minJ&&!confirm(`Solo hay ${validas} tarjeta(s) válida(s) y hacen falta ${minJ} para que la partida cuente en la liga. ¿Cerrar igualmente?`))return;
   j.cerrada=true;
-  whsRegistrar(j);
+  recomputeHandicaps();
   save();fbPushJornada(j);if(fb.ready)fbPushState();closeModal();render();
   toast('Partida cerrada: puntúa y actualiza hándicaps');
 }
@@ -1599,8 +1505,9 @@ function reabrirJornada(jid){
   if(!isAdmin())return;
   if(!confirm('¿Reabrir la partida? Dejará de puntuar hasta que se vuelva a cerrar.'))return;
   const j=S.jornadas.find(x=>x.id===jid);
-  whsQuitar(j);
-  j.cerrada=false;save();fbPushJornada(j);if(fb.ready)fbPushState();closeModal();render();
+  j.cerrada=false;
+  recomputeHandicaps();
+  save();fbPushJornada(j);if(fb.ready)fbPushState();closeModal();render();
   toast('Partida reabierta · hándicaps revertidos');
 }
 
@@ -1621,14 +1528,6 @@ function openCourseFromObj(c,id){
         <input type="number" step="0.1" value="${t.cr}" placeholder="CR" data-tee="${i}" data-f="cr">
         <button class="icon-btn" onclick="removeTee(${i})">✕</button>
       </div>
-      <div style="font-size:11px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin:10px 0 6px">Valoración de 9 hoyos (para el hándicap)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <input type="number" step="0.1" value="${t.cr9i??''}" placeholder="CR ida" data-tee="${i}" data-f="cr9i">
-        <input type="number" value="${t.slope9i??''}" placeholder="Slope ida" data-tee="${i}" data-f="slope9i">
-        <input type="number" step="0.1" value="${t.cr9v??''}" placeholder="CR vuelta" data-tee="${i}" data-f="cr9v">
-        <input type="number" value="${t.slope9v??''}" placeholder="Slope vuelta" data-tee="${i}" data-f="slope9v">
-      </div>
-      <div class="hint">Pídeselos al club. Si los dejas vacíos, se aproxima con la mitad del CR de 18 y el mismo slope.</div>
     </div>`).join('');
   let hoyoRows='';for(let i=0;i<18;i++){const h=c.hoyos[i];
     hoyoRows+=`<tr><td>${i+1}</td><td><input type="number" value="${h.par}" data-hoyo="${i}" data-f="par"></td>
@@ -1655,7 +1554,6 @@ function collectCourse(){
   document.querySelectorAll('[data-tee]').forEach(inp=>{const t=c.tees[+inp.dataset.tee];if(!t)return;
     const f=inp.dataset.f;
     if(f==='nombre'){t[f]=inp.value;return;}
-    if(f==='cr9i'||f==='slope9i'||f==='cr9v'||f==='slope9v'){t[f]=inp.value===''?null:(parseFloat(inp.value)||null);return;}
     t[f]=parseFloat(inp.value)||0;});
   document.querySelectorAll('[data-hoyo]').forEach(inp=>{const h=c.hoyos[+inp.dataset.hoyo];h[inp.dataset.f]=parseInt(inp.value)||0;});
   c.verificado=document.getElementById('cVerif').checked;
@@ -1909,61 +1807,7 @@ function rebrandGhApply(){
   return ch;
 }
 
-/* Demo puntual de Evolución: dos jugadores DEMO, uno sube y otro baja, para comprobar la gráfica.
-   Fácil de quitar luego: basta con borrar "DEMO · Sube" y "DEMO · Baja" desde Jugadores. */
-const DEMO_EVO_KEY='lp_demo_evo_2026_07_a';
-function demoEvoDone(){ return LS.getItem(DEMO_EVO_KEY)==='1'; }
-function demoEvoApply(){
-  if(!S.courses||!S.courses.length)return false;   // sin campo configurado, no forzamos nada
-  const course=S.courses[0], tee=(course.tees&&course.tees[0])||{nombre:''};
-  const dias=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);};
-  const jid1='demo_j1', jid2='demo_j2';
-  let ch=false;
-  if(!S.jugadores.some(p=>p.id==='demo_sube')){
-    S.jugadores.push({id:'demo_sube',nombre:'DEMO · Sube',hcpExacto:18.0,licencia:'',pin:'',
-      whsDiffs:[{d:20.0},{d:20.0},{d:20.0}]});
-    ch=true;
-  }
-  if(!S.jugadores.some(p=>p.id==='demo_baja')){
-    S.jugadores.push({id:'demo_baja',nombre:'DEMO · Baja',hcpExacto:18.0,licencia:'',pin:'',
-      whsDiffs:[{d:20.0},{d:20.0},{d:20.0}]});
-    ch=true;
-  }
-  const par=PINEDA.par;
-  const tarjeta=(extra)=>par.map(p=>p+extra);
-  [[jid1,dias(14),22.0,14.0],[jid2,dias(7),23.0,11.0]].forEach(([jid,fecha,dSube,dBaja])=>{
-    if(!S.jornadas.some(j=>j.id===jid)){
-      S.jornadas.push({id:jid,fecha,courseId:course.id,teeNombre:tee.nombre,creadorId:null,cerrada:true,
-        participantes:['demo_sube','demo_baja'],
-        resultados:[
-          {jugadorId:'demo_sube',hcpSnap:18.0,hoyos:tarjeta(2),retirada:null},
-          {jugadorId:'demo_baja',hcpSnap:18.0,hoyos:tarjeta(0),retirada:null}
-        ]});
-      ch=true;
-    }
-    const sube=S.jugadores.find(p=>p.id==='demo_sube'), baja=S.jugadores.find(p=>p.id==='demo_baja');
-    if(sube&&!sube.whsDiffs.some(d=>d.jid===jid)){sube.whsDiffs.push({d:dSube,jid});ch=true;}
-    if(baja&&!baja.whsDiffs.some(d=>d.jid===jid)){baja.whsDiffs.push({d:dBaja,jid});ch=true;}
-  });
-  const s2=S.jugadores.find(p=>p.id==='demo_sube'); if(s2)s2.hcpExacto=whsIndex(s2.whsDiffs.map(x=>x.d),null);
-  const b2=S.jugadores.find(p=>p.id==='demo_baja'); if(b2)b2.hcpExacto=whsIndex(b2.whsDiffs.map(x=>x.d),null);
-  return ch;
-}
-/* Quita la demo de Evolución (jugadores y jornadas DEMO), ya comprobada */
-const DEMO_EVO_OFF_KEY='lp_demo_evo_off_2026_07_a';
-function demoEvoOffDone(){ return LS.getItem(DEMO_EVO_OFF_KEY)==='1'; }
-function demoEvoOffApply(){
-  const ids=['demo_sube','demo_baja'], jids=['demo_j1','demo_j2'];
-  let ch=false;
-  const n1=S.jugadores.length; S.jugadores=S.jugadores.filter(p=>!ids.includes(p.id));
-  if(S.jugadores.length!==n1)ch=true;
-  const n2=S.jornadas.length; S.jornadas=S.jornadas.filter(j=>!jids.includes(j.id));
-  if(S.jornadas.length!==n2)ch=true;
-  if(sess&&sess.type==='player'&&ids.includes(sess.id)){sess=null;LS.removeItem(SESSKEY);}
-  return ch;
-}
-
-function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone()||!demoEvoDone()||!demoEvoOffDone(); }
+function maintPending(){ return !maintDone()||!patchDone()||!bajasDone()||!altasDone()||!bajas2Done()||!rebrandGhDone()||!hcpModelDone(); }
 function maintAll(){
   let changed=false,removed=[];
   if(!maintDone()){ const r=maintApply(); changed=changed||r.changed; removed=r.removed; LS.setItem(MAINT_KEY,'1'); }
@@ -1972,9 +1816,28 @@ function maintAll(){
   if(!altasDone()){ if(altasApply())changed=true; LS.setItem(ALTAS_KEY,'1'); }
   if(!bajas2Done()){ const r3=bajas2Apply(); if(r3.changed){changed=true;removed=removed.concat(r3.removed);} LS.setItem(BAJAS2_KEY,'1'); }
   if(!rebrandGhDone()){ if(rebrandGhApply())changed=true; LS.setItem(REBRAND_GH_KEY,'1'); }
-  if(!demoEvoDone()){ if(demoEvoApply())changed=true; LS.setItem(DEMO_EVO_KEY,'1'); }
-  if(!demoEvoOffDone()){ if(demoEvoOffApply())changed=true; LS.setItem(DEMO_EVO_OFF_KEY,'1'); }
+  if(!hcpModelDone()){ if(hcpModelApply())changed=true; LS.setItem(HCP_MODEL_KEY,'1'); }
   return {changed,removed};
+}
+
+/* Migración puntual: pasa a cada jugador ya existente (con el sistema WHS antiguo o sin nada)
+   al modelo nuevo simplificado — hcpBaseline (hcp de partida) + hcpHist (historial que da el
+   hcp oficial tras cada jornada). Su hcp actual se conserva como punto de partida. */
+const HCP_MODEL_KEY='lp_hcp_model_2026_07_a';
+function hcpModelDone(){ return LS.getItem(HCP_MODEL_KEY)==='1'; }
+function hcpModelApply(){
+  let ch=false;
+  (S.jugadores||[]).forEach(pl=>{
+    if(pl.hcpBaseline==null||!Array.isArray(pl.hcpHist)){
+      const base=Math.round((pl.hcpExacto!=null?pl.hcpExacto:0)*10)/10;
+      pl.hcpBaseline=base;
+      pl.hcpHist=[{hcp:base,jid:null,fecha:null,rec:null}];
+      delete pl.whsDiffs; delete pl.lowHI;
+      ch=true;
+    }
+  });
+  if(ch)recomputeHandicaps();
+  return ch;
 }
 
 /* Baja de jugadores de prueba (no toca PIN de nadie más) */
@@ -2012,9 +1875,9 @@ function bajas2Apply(){
 const ALTAS_KEY='lp_altas_2026_07_a';
 const ALTAS_JUGADORES=[
   {id:'carlos_lastra',nombre:'Carlos de la Lastra García-Pinillos',hcpExacto:14.7,licencia:'487823',pin:'',
-    whsDiffs:[29.0,18.4,24.3,25.1,17.3,23.9,22.6,19.1,18.4,15.1,20.1,20.1,20.1,19.8,19.2,18.4,16.8,8.2,8.8].map(d=>({d}))},
+    hcpBaseline:14.7,hcpHist:[{hcp:14.7,jid:null,fecha:null,rec:null}]},
   {id:'vicente_maesso',nombre:'Vicente Maesso Loscertales',hcpExacto:10.3,licencia:'234891',pin:'',
-    whsDiffs:[22.9,18.1,15.6,16.1,20.2,16.1,18.3,12.8,8.9,8.6,11.2,15.3,14.9,13.7,14.9,10.0].map(d=>({d}))}
+    hcpBaseline:10.3,hcpHist:[{hcp:10.3,jid:null,fecha:null,rec:null}]}
 ];
 function altasDone(){ return LS.getItem(ALTAS_KEY)==='1'; }
 function altasApply(){
